@@ -1,0 +1,24 @@
+{
+    "elements": [],
+    "actions": [
+        {
+            "type": "Configurator",
+            "name": "Devices",
+            "caption": "Roborock devices",
+            "rowCount": 10,
+            "delete": true,
+            "sort": {
+                "column": "name",
+                "direction": "ascending"
+            },
+            "columns": [
+                { "caption": "Name", "name": "name", "width": "auto" },
+                { "caption": "Model", "name": "model", "width": "250px" },
+                { "caption": "Device ID", "name": "address", "width": "220px" },
+                { "caption": "Online", "name": "online", "width": "90px" },
+                { "caption": "Supported", "name": "supported", "width": "160px" }
+            ],
+            "values": []
+        }
+    ]
+}

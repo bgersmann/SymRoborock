@@ -1,0 +1,19 @@
+{
+    "id": "{68BC56EA-7CE8-419D-8F92-B89BD56C1ABE}",
+    "name": "RoborockConfigurator",
+    "type": 4,
+    "vendor": "Roborock",
+    "aliases": [
+        "Roborock Configurator",
+        "Roborock Konfigurator"
+    ],
+    "url": "https://github.com/bgersmann/SymRoborock",
+    "parentRequirements": [
+        "{5028C495-ECD8-40BE-9DFB-23CA2C094D00}"
+    ],
+    "childRequirements": [],
+    "implemented": [
+        "{F28F0F64-9BD5-4036-9D8D-3B2918DDEB1F}"
+    ],
+    "prefix": "RRCFG"
+}

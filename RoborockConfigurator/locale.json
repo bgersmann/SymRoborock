@@ -1,0 +1,17 @@
+{
+    "translations": {
+        "de": {
+            "Roborock Configurator": "Roborock Konfigurator",
+            "Roborock devices": "Roborock-Geräte",
+            "Name": "Name",
+            "Model": "Modell",
+            "Device ID": "Geräte-ID",
+            "Online": "Online",
+            "Supported": "Unterstützt",
+            "Yes": "Ja",
+            "No": "Nein",
+            "No (protocol %s)": "Nein (Protokoll %s)",
+            "The Roborock Cloud instance is not active. Please log in there first.": "Die Roborock-Cloud-Instanz ist nicht aktiv. Bitte dort zuerst anmelden."
+        }
+    }
+}

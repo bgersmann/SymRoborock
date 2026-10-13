@@ -1,0 +1,63 @@
+{
+    "elements": [
+        {
+            "type": "ValidationTextBox",
+            "name": "DUID",
+            "caption": "Device ID (DUID)",
+            "width": "350px"
+        },
+        {
+            "type": "Select",
+            "name": "Connection",
+            "caption": "Connection",
+            "options": [
+                { "caption": "Local network, cloud as fallback", "value": 0 },
+                { "caption": "Cloud only", "value": 1 },
+                { "caption": "Local network only", "value": 2 }
+            ]
+        },
+        {
+            "type": "ValidationTextBox",
+            "name": "Host",
+            "caption": "IP address (empty = detect automatically)"
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "UpdateInterval",
+            "caption": "Update interval",
+            "suffix": "seconds",
+            "minimum": 10
+        },
+        {
+            "type": "CheckBox",
+            "name": "ShowMap",
+            "caption": "Show map (updated during cleaning)"
+        }
+    ],
+    "actions": [
+        {
+            "type": "Label",
+            "name": "DeviceInfo",
+            "caption": ""
+        },
+        {
+            "type": "Button",
+            "caption": "Update status",
+            "onClick": "if (!RRV_Update($id)) { echo 'Error'; }"
+        },
+        {
+            "type": "Button",
+            "caption": "Update rooms",
+            "onClick": "echo RRV_UpdateRooms($id);"
+        },
+        {
+            "type": "Button",
+            "caption": "Update map",
+            "onClick": "RRV_UpdateMap($id);"
+        }
+    ],
+    "status": [
+        { "code": 104, "icon": "inactive", "caption": "Please enter the device ID or create the instance via the configurator" },
+        { "code": 201, "icon": "error", "caption": "The vacuum is not reachable" }
+    ]
+}

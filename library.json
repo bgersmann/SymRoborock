@@ -1,0 +1,12 @@
+{
+    "id": "{95980F3C-B19D-49E9-BCBA-F231200B572C}",
+    "author": "BGersmann",
+    "name": "SymRoborock",
+    "url": "https://github.com/bgersmann/SymRoborock",
+    "compatibility": {
+        "version": "9.1"
+    },
+    "version": "1.0",
+    "build": 1,
+    "date": 0
+}

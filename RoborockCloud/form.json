@@ -1,0 +1,109 @@
+{
+    "elements": [
+        {
+            "type": "Label",
+            "name": "AccountLabel",
+            "caption": ""
+        },
+        {
+            "type": "Label",
+            "name": "HomeLabel",
+            "caption": ""
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "Log in",
+            "onClick": "RRC_UIOpenWizard($id);"
+        },
+        {
+            "type": "Button",
+            "name": "RefreshButton",
+            "caption": "Reload devices",
+            "onClick": "echo RRC_UpdateHomeData($id);"
+        },
+        {
+            "type": "Button",
+            "name": "LogoutButton",
+            "caption": "Log out",
+            "confirm": "Do you really want to log out?",
+            "onClick": "RRC_Logout($id);"
+        },
+        {
+            "type": "PopupAlert",
+            "name": "LoginWizard",
+            "visible": false,
+            "popup": {
+                "caption": "Roborock login",
+                "width": "650px",
+                "pages": [
+                    {
+                        "name": "account",
+                        "caption": "Step 1 of 3: Roborock account",
+                        "items": [
+                            {
+                                "type": "Label",
+                                "caption": "Log in with the account of the Roborock app. A verification code is sent to your email address, a password is not required."
+                            },
+                            {
+                                "type": "ValidationTextBox",
+                                "name": "WizardEmail",
+                                "caption": "Email address",
+                                "width": "400px",
+                                "validate": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"
+                            },
+                            {
+                                "type": "Select",
+                                "name": "WizardRegion",
+                                "caption": "Region",
+                                "value": "auto",
+                                "options": [
+                                    { "caption": "Automatic", "value": "auto" },
+                                    { "caption": "Europe", "value": "eu" },
+                                    { "caption": "America", "value": "us" },
+                                    { "caption": "China", "value": "cn" },
+                                    { "caption": "Russia", "value": "ru" }
+                                ]
+                            }
+                        ],
+                        "validate": "return RRC_UIRequestCode($id, $WizardEmail, $WizardRegion);",
+                        "nextPage": "code"
+                    },
+                    {
+                        "name": "code",
+                        "caption": "Step 2 of 3: Verification code",
+                        "items": [
+                            {
+                                "type": "Label",
+                                "caption": "A verification code has been sent to your email address. Please enter it here."
+                            },
+                            {
+                                "type": "ValidationTextBox",
+                                "name": "WizardCode",
+                                "caption": "Verification code",
+                                "validate": "^\\s*[0-9]{4,8}\\s*$"
+                            }
+                        ],
+                        "validate": "return RRC_UILogin($id, $WizardEmail, $WizardCode);",
+                        "onConfirm": "RRC_UIApplyLogin($id);",
+                        "onUndo": "// The session stays valid, a new login replaces it",
+                        "nextPage": "summary"
+                    },
+                    {
+                        "name": "summary",
+                        "caption": "Step 3 of 3: Done",
+                        "items": "return json_decode(RRC_UIGetSummaryItems($id), true);",
+                        "onConfirm": "RRC_UIFinish($id);",
+                        "nextPage": -1
+                    }
+                ]
+            }
+        }
+    ],
+    "status": [
+        { "code": 104, "icon": "inactive", "caption": "Not logged in" },
+        { "code": 201, "icon": "error", "caption": "The session has expired. Please log in again." },
+        { "code": 202, "icon": "error", "caption": "The cloud connection was refused" }
+    ]
+}
