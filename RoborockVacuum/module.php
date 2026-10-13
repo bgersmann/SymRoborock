@@ -818,8 +818,7 @@ class RoborockVacuum extends IPSModuleStrict
 
         $this->RegisterVariableInteger('CleanTime', $this->Translate('Cleaning time'), [
             'PRESENTATION' => VARIABLE_PRESENTATION_DURATION,
-            'FORMAT'       => 2,
-            'ICON'         => 'clock'
+            'FORMAT'       => 2
         ], 100);
         $this->RegisterVariableFloat('CleanArea', $this->Translate('Cleaned area'), [
             'PRESENTATION' => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
@@ -864,8 +863,7 @@ class RoborockVacuum extends IPSModuleStrict
         $this->RegisterVariableInteger('LastClean', $this->Translate('Last cleaning'), [
             'PRESENTATION' => VARIABLE_PRESENTATION_DATE_TIME,
             'DATE'         => 1,
-            'TIME'         => 1,
-            'ICON'         => 'calendar'
+            'TIME'         => 1
         ], 330);
     }
 
@@ -994,10 +992,11 @@ class RoborockVacuum extends IPSModuleStrict
         $position = 82;
         foreach ($rooms as $segment => $name) {
             $this->RegisterVariableBoolean('RoomSelect' . $segment, sprintf($this->Translate('Select %s'), $name), [
-                'PRESENTATION' => VARIABLE_PRESENTATION_SWITCH,
-                'ICON_TRUE'    => 'square-check',
-                'ICON_FALSE'   => 'square',
-                'USAGE_TYPE'   => 2
+                'PRESENTATION'   => VARIABLE_PRESENTATION_SWITCH,
+                'USE_ICON_FALSE' => true,
+                'ICON_TRUE'      => 'square-check',
+                'ICON_FALSE'     => 'square',
+                'USAGE_TYPE'     => 2
             ], $position++);
             $this->EnableAction('RoomSelect' . $segment);
         }
