@@ -810,9 +810,10 @@ class RoborockVacuum extends IPSModuleStrict
         $this->EnableAction('Control');
 
         $this->RegisterVariableInteger('State', $this->Translate('State'), [
-            'PRESENTATION' => VARIABLE_PRESENTATION_ENUMERATION,
-            'ICON'         => 'robot',
-            'OPTIONS'      => $this->BuildOptions(RoborockCodes::STATES, RoborockCodes::STATE_ICONS)
+            'PRESENTATION'     => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
+            'ICON'             => 'robot',
+            'INTERVALS_ACTIVE' => true,
+            'INTERVALS'        => $this->BuildIntervals(RoborockCodes::STATES, RoborockCodes::STATE_ICONS)
         ], 20);
 
         $this->RegisterVariableString('CurrentRoom', $this->Translate('Current room'), [
@@ -826,9 +827,10 @@ class RoborockVacuum extends IPSModuleStrict
         ], 30);
 
         $this->RegisterVariableInteger('Error', $this->Translate('Error'), [
-            'PRESENTATION' => VARIABLE_PRESENTATION_ENUMERATION,
-            'ICON'         => 'triangle-exclamation',
-            'OPTIONS'      => $this->BuildOptions(RoborockCodes::ERRORS, [])
+            'PRESENTATION'     => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
+            'ICON'             => 'triangle-exclamation',
+            'INTERVALS_ACTIVE' => true,
+            'INTERVALS'        => $this->BuildIntervals(RoborockCodes::ERRORS, [])
         ], 40);
 
         $known = json_decode($this->ReadAttributeString('KnownValues'), true) ?: [];
@@ -857,9 +859,10 @@ class RoborockVacuum extends IPSModuleStrict
         ], 101);
 
         $this->MaintainVariable('DockError', $this->Translate('Dock error'), VARIABLETYPE_INTEGER, [
-            'PRESENTATION' => VARIABLE_PRESENTATION_ENUMERATION,
-            'ICON'         => 'triangle-exclamation',
-            'OPTIONS'      => $this->BuildOptions(RoborockCodes::DOCK_ERRORS, [])
+            'PRESENTATION'     => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
+            'ICON'             => 'triangle-exclamation',
+            'INTERVALS_ACTIVE' => true,
+            'INTERVALS'        => $this->BuildIntervals(RoborockCodes::DOCK_ERRORS, [])
         ], 110, $dock);
 
         $position = 200;
@@ -1054,18 +1057,32 @@ class RoborockVacuum extends IPSModuleStrict
         }
     }
 
-    private function BuildOptions(array $Table, array $Icons): string
+    /**
+     * Text per code for read-only integer variables (an enumeration requires a variable action).
+     */
+    private function BuildIntervals(array $Table, array $Icons): string
     {
-        $options = [];
+        $intervals = [];
         foreach ($Table as $value => $caption) {
-            $options[] = [
-                'Value'      => $value,
-                'Caption'    => $this->Translate($caption),
-                'IconActive' => isset($Icons[$value]),
-                'IconValue'  => $Icons[$value] ?? '',
-                'Color'      => -1
+            $intervals[] = [
+                'IntervalMinValue' => $value,
+                'IntervalMaxValue' => $value,
+                'ConstantActive'   => true,
+                'ConstantValue'    => $this->Translate($caption),
+                'ConversionFactor' => 1,
+                'PrefixActive'     => false,
+                'PrefixValue'      => '',
+                'SuffixActive'     => false,
+                'SuffixValue'      => '',
+                'DigitsActive'     => false,
+                'DigitsValue'      => 0,
+                'IconActive'       => isset($Icons[$value]),
+                'IconValue'        => $Icons[$value] ?? '',
+                'ColorActive'      => false,
+                // The documentation names it "Color", the kernel only accepts "ColorValue"
+                'ColorValue'       => -1
             ];
         }
-        return json_encode($options);
+        return json_encode($intervals);
     }
 }
