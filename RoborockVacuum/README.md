@@ -54,6 +54,10 @@ Liest die Räume der aktuellen Karte neu ein.
 Reinigt mehrere Räume mit der Anzahl Durchgänge der Variable *Durchgänge*, z. B. `RRV_CleanRooms(12345, '1,6');`.
 Die Segment-IDs sind die Werte der Variable *Raum reinigen* und gelten nur für die aktive Karte.
 
+`void RRV_CleanRoomsByName(int $InstanzID, string $Raeume);`
+Reinigt Räume der aktiven Karte über ihren Namen, z. B. `RRV_CleanRoomsByName(12345, 'Flur,Wohnzimmer,Küche');`.
+Unbekannte Namen führen zu einer Fehlermeldung mit den vorhandenen Räumen.
+
 `bool RRV_UpdateMap(int $InstanzID);`
 Liest die Karte sofort neu.
 

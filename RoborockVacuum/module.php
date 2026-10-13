@@ -319,6 +319,35 @@ class RoborockVacuum extends IPSModuleStrict
     }
 
     /**
+     * Cleans rooms of the current map by name, e.g. "Flur,Wohnzimmer,Küche". The order is kept.
+     */
+    public function CleanRoomsByName(string $RoomNames): void
+    {
+        $rooms = json_decode($this->ReadAttributeString('Rooms'), true) ?: [];
+        $lookup = [];
+        foreach ($rooms as $segment => $name) {
+            $lookup[mb_strtolower(trim($name))] = $segment;
+        }
+        $segments = [];
+        $missing = [];
+        foreach (explode(',', $RoomNames) as $name) {
+            $name = trim($name);
+            if ($name === '') {
+                continue;
+            }
+            if (isset($lookup[mb_strtolower($name)])) {
+                $segments[] = $lookup[mb_strtolower($name)];
+            } else {
+                $missing[] = $name;
+            }
+        }
+        if (count($missing) > 0) {
+            throw new Exception(sprintf($this->Translate('Unknown rooms on the current map: %s (available: %s)'), implode(', ', $missing), implode(', ', $rooms)));
+        }
+        $this->CleanRooms(implode(',', $segments));
+    }
+
+    /**
      * Sends any V1 command (see python-roborock RoborockCommand). $Params is JSON, e.g. "[]" or "[102]".
      * Returns the result as JSON.
      */

@@ -22,6 +22,7 @@
             "Room %d": "Raum %d",
             "%d rooms found": "%d Räume gefunden",
             "No rooms selected": "Keine Räume ausgewählt",
+            "Unknown rooms on the current map: %s (available: %s)": "Unbekannte Räume auf der aktiven Karte: %s (vorhanden: %s)",
             "The command %s is not supported by this device": "Der Befehl %s wird von diesem Gerät nicht unterstützt",
             "The Roborock Cloud instance is not active": "Die Roborock-Cloud-Instanz ist nicht aktiv",
 
