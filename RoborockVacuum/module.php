@@ -195,10 +195,8 @@ class RoborockVacuum extends IPSModuleStrict
                 $this->SetStatus(102);
             }
         } catch (Exception $e) {
+            // No log entry: the state is visible in the status of the instance and the connection variables
             $this->SendDebug('Update', $e->getMessage(), 0);
-            if ($this->GetStatus() !== 201) {
-                $this->LogMessage(sprintf($this->Translate('The vacuum is not reachable: %s'), $e->getMessage()), KL_WARNING);
-            }
             $this->SetStatus(201);
             return false;
         }
@@ -215,9 +213,12 @@ class RoborockVacuum extends IPSModuleStrict
             $this->SetBuffer('DetailsTime', (string) time());
             $this->UpdateDetails();
         }
-        if ($this->ReadPropertyBoolean('ShowMap')) {
+        if ($this->ReadPropertyBoolean('ShowMap') && $this->GetValue('CloudConnection') === 1) {
+            // Maps are only available via the cloud: during cleaning on every update, afterwards once more, otherwise hourly
             $active = in_array($this->GetValue('State'), self::ACTIVE_STATES, true) || $this->GetValue('State') > 6300;
-            if ($active || time() - (int) $this->GetBuffer('MapTime') >= self::DETAILS_INTERVAL) {
+            $wasActive = $this->GetBuffer('MapActive') === '1';
+            $this->SetBuffer('MapActive', $active ? '1' : '0');
+            if ($active || $wasActive || time() - (int) $this->GetBuffer('MapTime') >= self::ROOMS_INTERVAL) {
                 $this->RunSafely('Map', function () {
                     $this->UpdateMap();
                 });
@@ -368,6 +369,7 @@ class RoborockVacuum extends IPSModuleStrict
         if (!is_array($response)) {
             throw new Exception('No response from the cloud instance');
         }
+        $this->UpdateConnection($response);
         if (isset($response['error'])) {
             $error = $response['error'];
             throw new Exception(is_array($error) ? (string) ($error['message'] ?? json_encode($error)) : (string) $error);
@@ -495,6 +497,17 @@ class RoborockVacuum extends IPSModuleStrict
             $params['mop_mode'] = $values[2];
         }
         $this->SendCommandChecked('set_clean_motor_mode', [$params]);
+    }
+
+    private function UpdateConnection(array $Response): void
+    {
+        if (isset($Response['cloud'])) {
+            $this->SetValue('CloudConnection', (int) $Response['cloud']);
+        }
+        // Only known if the local connection was used for this command
+        if (isset($Response['local'])) {
+            $this->SetValue('LocalConnection', (bool) $Response['local']);
+        }
     }
 
     private function RunRoutine(int $RoutineID): void
@@ -820,6 +833,24 @@ class RoborockVacuum extends IPSModuleStrict
             'PRESENTATION' => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
             'ICON'         => 'location-dot'
         ], 25);
+
+        $this->RegisterVariableInteger('CloudConnection', $this->Translate('Cloud connection'), [
+            'PRESENTATION'     => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
+            'ICON'             => 'cloud',
+            'INTERVALS_ACTIVE' => true,
+            'INTERVALS'        => $this->BuildIntervals(
+                [0 => 'Disconnected', 1 => 'Connected', 2 => 'Not responding'],
+                [0 => 'cloud-slash', 1 => 'cloud-check', 2 => 'cloud-exclamation']
+            )
+        ], 26);
+        $this->RegisterVariableBoolean('LocalConnection', $this->Translate('Local connection'), [
+            'PRESENTATION' => VARIABLE_PRESENTATION_VALUE_PRESENTATION,
+            'ICON'         => 'network-wired',
+            'OPTIONS'      => json_encode([
+                ['Value' => false, 'Caption' => $this->Translate('Not reachable'), 'IconActive' => false, 'IconValue' => '', 'ColorActive' => false, 'ColorValue' => -1],
+                ['Value' => true, 'Caption' => $this->Translate('Reachable'), 'IconActive' => false, 'IconValue' => '', 'ColorActive' => false, 'ColorValue' => -1]
+            ])
+        ], 27);
 
         $this->RegisterVariableInteger('Battery', $this->Translate('Battery'), [
             'PRESENTATION' => VARIABLE_PRESENTATION_VALUE_PRESENTATION,

@@ -22,6 +22,15 @@ class RoborockCloud extends IPSModuleStrict
     private const RPC_TIMEOUT = 10;
     private const LOCAL_HOST_LIFETIME = 43200;
     private const HOME_DATA_MIN_INTERVAL = 60;
+    private const CLOUD_RECONNECT_INTERVAL = 300;
+
+    // Connection state of the cloud for the children
+    private const CLOUD_DISCONNECTED = 0;
+    private const CLOUD_CONNECTED = 1;
+    private const CLOUD_NOT_RESPONDING = 2;
+
+    // Result of the local connection during the current RPC (null = not tried)
+    private ?bool $localReachable = null;
 
     public function Create(): void
     {
@@ -408,7 +417,9 @@ class RoborockCloud extends IPSModuleStrict
                     return json_encode($rooms);
                 case 'RPC':
                     $result = $this->Rpc((string) $data['DUID'], (string) $data['Method'], $data['Params'] ?? [], (string) ($data['Mode'] ?? 'auto'), (string) ($data['Host'] ?? ''));
-                    return json_encode($result);
+                    return json_encode($result + ['cloud' => $this->GetCloudState(), 'local' => $this->localReachable]);
+                case 'GetConnection':
+                    return json_encode(['cloud' => $this->GetCloudState()]);
                 case 'GetMap':
                     // Maps are only delivered via MQTT; the result is the gzip compressed map as base64
                     $device = $this->FindDevice((string) $data['DUID']);
@@ -439,7 +450,7 @@ class RoborockCloud extends IPSModuleStrict
             }
         } catch (Exception $e) {
             $this->SendDebug('ForwardData', $e->getMessage(), 0);
-            return json_encode(['error' => ['message' => $e->getMessage()]]);
+            return json_encode(['error' => ['message' => $e->getMessage()], 'cloud' => $this->GetCloudState(), 'local' => $this->localReachable]);
         }
     }
 
@@ -654,6 +665,7 @@ class RoborockCloud extends IPSModuleStrict
     {
         $this->SetBuffer('MqttConnected', $Connected ? '1' : '0');
         if ($Connected) {
+            $this->SetBuffer('CloudTimeouts', '0');
             $this->SetBuffer('MqttLastRx', (string) time());
             $this->SetBuffer('Nonce', bin2hex(random_bytes(16)));
         }
@@ -694,9 +706,12 @@ class RoborockCloud extends IPSModuleStrict
             }
             if ($Host !== '') {
                 try {
-                    return $this->LocalRpc($DUID, $Host, $device['localKey'], $Method, $Params);
+                    $response = $this->LocalRpc($DUID, $Host, $device['localKey'], $Method, $Params);
+                    $this->localReachable = true;
+                    return $response;
                 } catch (Exception $e) {
                     $this->SendDebug('Local', $DUID . ': ' . $e->getMessage(), 0);
+                    $this->localReachable = false;
                     $this->ForgetLocalHost($DUID);
                     if ($Mode === 'local') {
                         throw $e;
@@ -752,11 +767,37 @@ class RoborockCloud extends IPSModuleStrict
         while (microtime(true) < $deadline) {
             $response = $this->TakeRpcResponse(($MapResponse ? 'map' : '') . $requestID);
             if ($response !== null) {
+                $this->SetBuffer('CloudTimeouts', '0');
                 return $response;
             }
             IPS_Sleep(50);
         }
+        $this->HandleCloudTimeout();
         throw new Exception('Timeout waiting for the cloud response to ' . $Method);
+    }
+
+    /**
+     * The broker sometimes keeps the connection open but stops delivering messages for hours.
+     * A new session (DISCONNECT, the socket reconnects) fixes this.
+     */
+    private function HandleCloudTimeout(): void
+    {
+        $this->SetBuffer('CloudTimeouts', (string) ((int) $this->GetBuffer('CloudTimeouts') + 1));
+        if (time() - (int) $this->GetBuffer('CloudReconnectTime') < self::CLOUD_RECONNECT_INTERVAL) {
+            return;
+        }
+        $this->SetBuffer('CloudReconnectTime', (string) time());
+        $this->SendDebug('MQTT', 'Cloud does not respond, starting a new session', 0);
+        $this->MqttSend(RoborockProtocol::MqttDisconnect());
+        $this->SetMqttConnected(false);
+    }
+
+    private function GetCloudState(): int
+    {
+        if ($this->GetBuffer('MqttConnected') !== '1') {
+            return self::CLOUD_DISCONNECTED;
+        }
+        return ((int) $this->GetBuffer('CloudTimeouts') > 0) ? self::CLOUD_NOT_RESPONDING : self::CLOUD_CONNECTED;
     }
 
     private function StoreRpcResponse(string $RequestID, array $Response): void
@@ -806,8 +847,9 @@ class RoborockCloud extends IPSModuleStrict
         try {
             $response = $this->CloudRpc($DUID, $device['localKey'], 'get_network_info', []);
         } catch (Exception $e) {
+            // Keep using the last known address, the cloud is only needed to detect a new one
             $this->SendDebug('NetworkInfo', $e->getMessage(), 0);
-            return '';
+            return $hosts[$DUID]['ip'] ?? '';
         }
         $ip = $response['result']['ip'] ?? '';
         if ($ip !== '') {
