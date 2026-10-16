@@ -32,6 +32,55 @@
             "type": "CheckBox",
             "name": "ShowMap",
             "caption": "Show map (updated during cleaning)"
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "Cleaning programs",
+            "expanded": true,
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "Each program appears as a button in the variable \"Start program\" below the instance."
+                },
+                {
+                    "type": "List",
+                    "name": "Programs",
+                    "caption": "Programs",
+                    "rowCount": 5,
+                    "add": true,
+                    "delete": true,
+                    "changeOrder": true,
+                    "columns": [
+                        { "caption": "Name", "name": "Name", "width": "170px", "add": "", "edit": { "type": "ValidationTextBox" } },
+                        { "caption": "Map", "name": "Map", "width": "140px", "add": -1, "edit": { "type": "Select", "options": [] } },
+                        { "caption": "Rooms", "name": "Rooms", "width": "auto", "add": "", "edit": { "type": "ValidationTextBox" } },
+                        { "caption": "Cleaning mode", "name": "CleanMode", "width": "170px", "add": -1, "edit": { "type": "Select", "options": [] } },
+                        { "caption": "Suction power", "name": "FanPower", "width": "130px", "add": -1, "edit": { "type": "Select", "options": [] } },
+                        { "caption": "Water flow", "name": "WaterBoxMode", "width": "130px", "add": -1, "edit": { "type": "Select", "options": [] } },
+                        { "caption": "Mop route", "name": "MopMode", "width": "130px", "add": -1, "edit": { "type": "Select", "options": [] } },
+                        {
+                            "caption": "Passes", "name": "Passes", "width": "100px", "add": 1,
+                            "edit": { "type": "Select", "options": [ { "caption": "1x", "value": 1 }, { "caption": "2x", "value": 2 }, { "caption": "3x", "value": 3 } ] }
+                        }
+                    ]
+                },
+                {
+                    "type": "Label",
+                    "name": "ProgramRooms",
+                    "caption": ""
+                },
+                {
+                    "type": "Label",
+                    "name": "ProgramCheck",
+                    "caption": "",
+                    "visible": false
+                },
+                {
+                    "type": "CheckBox",
+                    "name": "ProgramReturnsHome",
+                    "caption": "A program start during a cleaning sends the robot back to the dock (start/stop button)"
+                }
+            ]
         }
     ],
     "actions": [

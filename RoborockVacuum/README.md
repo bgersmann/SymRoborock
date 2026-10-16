@@ -13,10 +13,27 @@ Status und Steuerung eines Roborock-Saugroboters. Die Instanz wird normalerweise
 | Aktualisierungsintervall | Abfrage des Status in Sekunden (Standard 30). Verschleißteile und Statistik alle 10 Minuten, Räume und Routinen stündlich |
 | Karte anzeigen | Speichert die Karte als Bild (Medienobjekt *Karte*). Während der Reinigung bei jeder Aktualisierung, sonst alle 10 Minuten |
 
+### Reinigungsprogramme
+
+In der Liste *Reinigungsprogramme* lassen sich feste Abläufe anlegen. Jedes Programm hat:
+
+| Spalte | Beschreibung |
+|---|---|
+| Name | erscheint als Knopf in der Variable *Programm starten* |
+| Karte | *Aktive Karte* oder eine feste Karte (z. B. Etage); bei Bedarf wird die Karte vorher gewechselt |
+| Räume | Raumnamen mit Komma getrennt, z. B. `Flur, Wohnzimmer, Küche`; leer = ganze Karte. Unter der Liste stehen die Räume jeder Karte, unbekannte Namen werden angezeigt |
+| Reinigungsmodus, Saugstärke, Wassermenge, Wischroute | werden vor dem Start gesetzt, *Unverändert* lässt die aktuelle Einstellung |
+| Durchgänge | 1x–3x |
+
+Mit *Ein Programmstart während einer Reinigung schickt den Roboter zur Station* wird jeder Programm-Knopf zum Start/Stopp-Knopf.
+
 ### Statusvariablen
 
 | Ident | Typ | Beschreibung |
 |---|---|---|
+| Program | Integer (schaltbar) | Reinigungsprogramm starten (nur wenn Programme angelegt sind) |
+| CloudConnection | Integer | Cloud-Verbindung: Verbunden, Antwortet nicht, Getrennt |
+| LocalConnection | Boolean | Lokale Verbindung zum Roboter erreichbar |
 | Control | Integer (schaltbar) | Start, Pause, Stopp, Zur Station, Spotreinigung, Finden, Ausgewählte Räume reinigen, mit Station: Staubbehälter leeren, Mopp waschen |
 | State | Integer | Status des Roboters (Reinigt, Lädt, …) |
 | CurrentRoom | String | Raum, in dem sich der Roboter befindet (aus der Karte) |
@@ -57,6 +74,9 @@ Die Segment-IDs sind die Werte der Variable *Raum reinigen* und gelten nur für 
 `void RRV_CleanRoomsByName(int $InstanzID, string $Raeume);`
 Reinigt Räume der aktiven Karte über ihren Namen, z. B. `RRV_CleanRoomsByName(12345, 'Flur,Wohnzimmer,Küche');`.
 Unbekannte Namen führen zu einer Fehlermeldung mit den vorhandenen Räumen.
+
+`void RRV_StartProgram(int $InstanzID, string $Name);`
+Startet ein Reinigungsprogramm der Instanzkonfiguration, z. B. `RRV_StartProgram(12345, 'EG Saugen kurz');`.
 
 `bool RRV_UpdateMap(int $InstanzID);`
 Liest die Karte sofort neu.

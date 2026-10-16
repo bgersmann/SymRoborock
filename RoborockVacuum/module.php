@@ -50,6 +50,8 @@ class RoborockVacuum extends IPSModuleStrict
         $this->RegisterPropertyString('Host', '');
         $this->RegisterPropertyInteger('UpdateInterval', 30);
         $this->RegisterPropertyBoolean('ShowMap', true);
+        $this->RegisterPropertyString('Programs', '[]');
+        $this->RegisterPropertyBoolean('ProgramReturnsHome', false);
 
         $this->RegisterAttributeString('Rooms', '{}');
         $this->RegisterAttributeString('Maps', '{}');
@@ -149,6 +151,13 @@ class RoborockVacuum extends IPSModuleStrict
                 }
                 $this->SetValue('Routine', 0);
                 return;
+            case 'Program':
+                $programs = $this->GetPrograms();
+                if (isset($programs[(int) $Value - 1])) {
+                    $this->RunProgram($programs[(int) $Value - 1]);
+                }
+                $this->SetValue('Program', 0);
+                return;
             default:
                 throw new Exception('Invalid ident');
         }
@@ -158,6 +167,7 @@ class RoborockVacuum extends IPSModuleStrict
     public function GetConfigurationForm(): string
     {
         $form = json_decode(file_get_contents(__DIR__ . '/form.json'), true);
+        $this->FillProgramElements($form['elements']);
         $info = $this->GetDeviceInfo();
         foreach ($form['actions'] as &$action) {
             if (($action['name'] ?? '') === 'DeviceInfo') {
@@ -167,6 +177,82 @@ class RoborockVacuum extends IPSModuleStrict
             }
         }
         return json_encode($form);
+    }
+
+    /**
+     * Options of the program list and hints about the rooms, depending on the maps of the robot.
+     */
+    private function FillProgramElements(array &$Elements): void
+    {
+        $maps = json_decode($this->ReadAttributeString('Maps'), true) ?: [];
+        $unchanged = ['caption' => $this->Translate('Unchanged'), 'value' => -1];
+        foreach ($Elements as &$element) {
+            if (isset($element['items'])) {
+                $this->FillProgramElements($element['items']);
+            }
+            switch ($element['name'] ?? '') {
+                case 'Programs':
+                    foreach ($element['columns'] as &$column) {
+                        $options = null;
+                        switch ($column['name']) {
+                            case 'Map':
+                                $options = [['caption' => $this->Translate('Active map'), 'value' => -1]];
+                                foreach ($maps as $flag => $map) {
+                                    $options[] = ['caption' => $map['name'], 'value' => (int) $flag];
+                                }
+                                break;
+                            case 'CleanMode':
+                                $options = [$unchanged];
+                                foreach ($this->GetCleanModes() as $value => [$caption]) {
+                                    $options[] = ['caption' => $caption, 'value' => $value];
+                                }
+                                break;
+                            case 'FanPower':
+                            case 'WaterBoxMode':
+                            case 'MopMode':
+                                $options = [$unchanged];
+                                foreach ($this->GetModeOptions($column['name']) as $value => $caption) {
+                                    $options[] = ['caption' => $caption, 'value' => $value];
+                                }
+                                break;
+                        }
+                        if ($options !== null) {
+                            $column['edit']['options'] = $options;
+                        }
+                    }
+                    break;
+                case 'ProgramRooms':
+                    $lines = [];
+                    foreach ($maps as $map) {
+                        $lines[] = $map['name'] . ': ' . implode(', ', array_filter($map['rooms']));
+                    }
+                    $element['caption'] = count($lines) > 0
+                        ? $this->Translate('Rooms (comma separated, empty = whole map):') . "\n" . implode("\n", $lines)
+                        : $this->Translate('The rooms are shown after the first update of the robot.');
+                    break;
+                case 'ProgramCheck':
+                    $problems = $this->CheckPrograms($maps);
+                    $element['caption'] = implode("\n", $problems);
+                    $element['visible'] = count($problems) > 0;
+                    break;
+            }
+        }
+    }
+
+    private function CheckPrograms(array $Maps): array
+    {
+        $problems = [];
+        $currentMap = $this->ReadAttributeInteger('CurrentMap');
+        foreach ($this->GetPrograms() as $program) {
+            $flag = (int) ($program['Map'] ?? -1);
+            $flag = $flag >= 0 ? $flag : $currentMap;
+            $rooms = $Maps[(string) $flag]['rooms'] ?? json_decode($this->ReadAttributeString('Rooms'), true) ?: [];
+            [, $missing] = $this->ResolveRooms((string) ($program['Rooms'] ?? ''), $rooms);
+            if (count($missing) > 0) {
+                $problems[] = sprintf($this->Translate('Program "%s": unknown rooms %s'), trim($program['Name']), implode(', ', $missing));
+            }
+        }
+        return $problems;
     }
 
     // -------------------------------------------------------------------------
@@ -307,16 +393,7 @@ class RoborockVacuum extends IPSModuleStrict
      */
     public function CleanRooms(string $SegmentIDs): void
     {
-        $segments = array_values(array_filter(array_map('intval', explode(',', $SegmentIDs))));
-        if (count($segments) === 0) {
-            throw new Exception($this->Translate('No rooms selected'));
-        }
-        $params = ['segments' => $segments];
-        $passes = (int) $this->GetValue('Passes');
-        if ($passes > 1) {
-            $params['repeat'] = $passes;
-        }
-        $this->SendCommandChecked('app_segment_clean', [$params]);
+        $this->CleanSegments(array_map('intval', explode(',', $SegmentIDs)), (int) $this->GetValue('Passes'));
     }
 
     /**
@@ -325,27 +402,25 @@ class RoborockVacuum extends IPSModuleStrict
     public function CleanRoomsByName(string $RoomNames): void
     {
         $rooms = json_decode($this->ReadAttributeString('Rooms'), true) ?: [];
-        $lookup = [];
-        foreach ($rooms as $segment => $name) {
-            $lookup[mb_strtolower(trim($name))] = $segment;
-        }
-        $segments = [];
-        $missing = [];
-        foreach (explode(',', $RoomNames) as $name) {
-            $name = trim($name);
-            if ($name === '') {
-                continue;
-            }
-            if (isset($lookup[mb_strtolower($name)])) {
-                $segments[] = $lookup[mb_strtolower($name)];
-            } else {
-                $missing[] = $name;
-            }
-        }
+        [$segments, $missing] = $this->ResolveRooms($RoomNames, $rooms);
         if (count($missing) > 0) {
             throw new Exception(sprintf($this->Translate('Unknown rooms on the current map: %s (available: %s)'), implode(', ', $missing), implode(', ', $rooms)));
         }
-        $this->CleanRooms(implode(',', $segments));
+        $this->CleanSegments($segments, (int) $this->GetValue('Passes'));
+    }
+
+    /**
+     * Starts a cleaning program of the instance configuration by its name.
+     */
+    public function StartProgram(string $Name): void
+    {
+        foreach ($this->GetPrograms() as $program) {
+            if (mb_strtolower(trim($program['Name'])) === mb_strtolower(trim($Name))) {
+                $this->RunProgram($program);
+                return;
+            }
+        }
+        throw new Exception(sprintf($this->Translate('Unknown program: %s'), $Name));
     }
 
     /**
@@ -497,6 +572,118 @@ class RoborockVacuum extends IPSModuleStrict
             $params['mop_mode'] = $values[2];
         }
         $this->SendCommandChecked('set_clean_motor_mode', [$params]);
+    }
+
+    private function CleanSegments(array $Segments, int $Passes): void
+    {
+        $segments = array_values(array_filter(array_map('intval', $Segments)));
+        if (count($segments) === 0) {
+            throw new Exception($this->Translate('No rooms selected'));
+        }
+        $params = ['segments' => $segments];
+        if ($Passes > 1) {
+            $params['repeat'] = $Passes;
+        }
+        $this->SendCommandChecked('app_segment_clean', [$params]);
+    }
+
+    /**
+     * Returns [segment IDs, unknown names] for a comma separated list of room names.
+     */
+    private function ResolveRooms(string $RoomNames, array $Rooms): array
+    {
+        $lookup = [];
+        foreach ($Rooms as $segment => $name) {
+            $lookup[mb_strtolower(trim($name))] = (int) $segment;
+        }
+        $segments = [];
+        $missing = [];
+        foreach (explode(',', $RoomNames) as $name) {
+            $name = trim($name);
+            if ($name === '') {
+                continue;
+            }
+            if (isset($lookup[mb_strtolower($name)])) {
+                $segments[] = $lookup[mb_strtolower($name)];
+            } else {
+                $missing[] = $name;
+            }
+        }
+        return [$segments, $missing];
+    }
+
+    private function GetPrograms(): array
+    {
+        $programs = json_decode($this->ReadPropertyString('Programs'), true);
+        if (!is_array($programs)) {
+            return [];
+        }
+        return array_values(array_filter($programs, function ($program) {
+            return trim((string) ($program['Name'] ?? '')) !== '';
+        }));
+    }
+
+    private function RunProgram(array $Program): void
+    {
+        $this->SendDebug('Program', json_encode($Program), 0);
+        $state = (int) $this->GetValue('State');
+        $active = in_array($state, self::ACTIVE_STATES, true) || $state > 6300;
+        if ($active && $this->ReadPropertyBoolean('ProgramReturnsHome')) {
+            // Like a start/stop button: a running cleaning is ended
+            $this->SendCommandChecked('app_charge', []);
+            return;
+        }
+
+        $map = (int) ($Program['Map'] ?? -1);
+        if ($map >= 0 && $map !== $this->ReadAttributeInteger('CurrentMap')) {
+            $this->SwitchMap($map);
+        }
+
+        // Cleaning mode first, then the individual settings override it
+        if ((int) ($Program['CleanMode'] ?? -1) > 0 && @$this->GetIDForIdent('CleanMode') !== false) {
+            $this->SetCleanMode((int) $Program['CleanMode']);
+            $this->SetValue('CleanMode', (int) $Program['CleanMode']);
+        }
+        foreach (['FanPower' => 'set_custom_mode', 'WaterBoxMode' => 'set_water_box_custom_mode', 'MopMode' => 'set_mop_mode'] as $ident => $method) {
+            $value = (int) ($Program[$ident] ?? -1);
+            if ($value >= 0 && @$this->GetIDForIdent($ident) !== false) {
+                $this->SendCommand($method, json_encode([$value]));
+                $this->SetValue($ident, $value);
+            }
+        }
+
+        $passes = max(1, (int) ($Program['Passes'] ?? 1));
+        if (trim((string) ($Program['Rooms'] ?? '')) === '') {
+            $this->SendCommandChecked('app_start', []);
+            return;
+        }
+        $rooms = json_decode($this->ReadAttributeString('Rooms'), true) ?: [];
+        [$segments, $missing] = $this->ResolveRooms((string) $Program['Rooms'], $rooms);
+        if (count($missing) > 0) {
+            throw new Exception(sprintf($this->Translate('Unknown rooms on the current map: %s (available: %s)'), implode(', ', $missing), implode(', ', $rooms)));
+        }
+        $this->CleanSegments($segments, $passes);
+    }
+
+    /**
+     * Loads another map and waits until the robot uses it, then reads its rooms.
+     */
+    private function SwitchMap(int $Flag): void
+    {
+        $this->SendDebug('Program', 'Switching to map ' . $Flag, 0);
+        $this->SendCommand('load_multi_map', json_encode([$Flag]));
+        $deadline = time() + 25;
+        do {
+            IPS_Sleep(2500);
+            $status = json_decode($this->SendCommand('get_status', '[]'), true);
+            $status = (is_array($status) && isset($status[0])) ? $status[0] : $status;
+            $current = ((int) ($status['map_status'] ?? 0)) >> 2;
+        } while ($current !== $Flag && time() < $deadline);
+        if ($current !== $Flag) {
+            throw new Exception($this->Translate('The robot did not switch the map'));
+        }
+        $this->ApplyStatus($status);
+        $this->UpdateRooms();
     }
 
     private function UpdateConnection(array $Response): void
@@ -877,6 +1064,7 @@ class RoborockVacuum extends IPSModuleStrict
 
         $this->RegisterMapVariables();
         $this->RegisterRoutineVariable();
+        $this->RegisterProgramVariable();
 
         $this->RegisterVariableInteger('CleanTime', $this->Translate('Cleaning time'), [
             'PRESENTATION' => VARIABLE_PRESENTATION_DURATION,
@@ -930,7 +1118,10 @@ class RoborockVacuum extends IPSModuleStrict
         ], 330);
     }
 
-    private function RegisterCleanModeVariable(): void
+    /**
+     * Cleaning modes: value => [caption (translated), icon].
+     */
+    private function GetCleanModes(): array
     {
         $modes = [
             self::MODE_VACUUM      => ['Vacuum', 'broom'],
@@ -941,9 +1132,17 @@ class RoborockVacuum extends IPSModuleStrict
         if ($this->ReadAttributeBoolean('SmartMode')) {
             $modes[self::MODE_SMART] = ['SmartPlan', 'wand-magic-sparkles'];
         }
+        foreach ($modes as &$mode) {
+            $mode[0] = $this->Translate($mode[0]);
+        }
+        return $modes;
+    }
+
+    private function RegisterCleanModeVariable(): void
+    {
         $options = [];
-        foreach ($modes as $value => [$caption, $icon]) {
-            $options[] = ['Value' => $value, 'Caption' => $this->Translate($caption), 'IconActive' => true, 'IconValue' => $icon, 'Color' => -1];
+        foreach ($this->GetCleanModes() as $value => [$caption, $icon]) {
+            $options[] = ['Value' => $value, 'Caption' => $caption, 'IconActive' => true, 'IconValue' => $icon, 'Color' => -1];
         }
         $this->RegisterVariableInteger('CleanMode', $this->Translate('Cleaning mode'), [
             'PRESENTATION' => VARIABLE_PRESENTATION_ENUMERATION,
@@ -956,9 +1155,37 @@ class RoborockVacuum extends IPSModuleStrict
 
     private function RegisterModeVariable(string $Ident): void
     {
+        [$caption, $icon, $position] = [
+            'FanPower'     => ['Suction power', 'fan', 50],
+            'WaterBoxMode' => ['Water flow', 'droplet', 60],
+            'MopMode'      => ['Mop route', 'route', 70]
+        ][$Ident];
+        $options = [];
+        foreach ($this->GetModeOptions($Ident) as $value => $text) {
+            $options[] = ['Value' => $value, 'Caption' => $text, 'IconActive' => false, 'IconValue' => '', 'Color' => -1];
+        }
+        $this->RegisterVariableInteger($Ident, $this->Translate($caption), [
+            'PRESENTATION' => VARIABLE_PRESENTATION_ENUMERATION,
+            'ICON'         => $icon,
+            'OPTIONS'      => json_encode($options)
+        ], $position);
+        $this->EnableAction($Ident);
+    }
+
+    /**
+     * Options of a mode variable: value => caption (translated).
+     */
+    private function GetModeOptions(string $Ident): array
+    {
         $known = json_decode($this->ReadAttributeString('KnownValues'), true) ?: [];
         $base = ($Ident === 'WaterBoxMode' && $this->ReadAttributeBoolean('WaterSlider')) ? self::BASE_OPTIONS_WATER_SLIDER : self::BASE_OPTIONS[$Ident];
         $values = array_unique(array_merge($base, $known[$Ident] ?? []));
+        if ($Ident === 'WaterBoxMode' && $this->ReadAttributeBoolean('WaterSlider')) {
+            // The classic levels 201-203 duplicate the slider levels (e.g. reported before the slider was detected)
+            $values = array_filter($values, function ($value) {
+                return $value < 201 || $value > 203;
+            });
+        }
         sort($values);
 
         switch ($Ident) {
@@ -971,15 +1198,12 @@ class RoborockVacuum extends IPSModuleStrict
                     $values = array_unique(array_merge(array_keys(RoborockCodes::FAN_POWER_LEGACY), $known[$Ident]));
                     sort($values);
                 }
-                [$caption, $icon, $position] = ['Suction power', 'fan', 50];
                 break;
             case 'WaterBoxMode':
                 $table = RoborockCodes::WATER_BOX_MODES + RoborockCodes::WATER_SLIDER;
-                [$caption, $icon, $position] = ['Water flow', 'droplet', 60];
                 break;
             default:
                 $table = RoborockCodes::MOP_MODES;
-                [$caption, $icon, $position] = ['Mop route', 'route', 70];
                 break;
         }
         $options = [];
@@ -992,14 +1216,27 @@ class RoborockVacuum extends IPSModuleStrict
             } else {
                 $text = (string) $value;
             }
-            $options[] = ['Value' => $value, 'Caption' => $text, 'IconActive' => false, 'IconValue' => '', 'Color' => -1];
+            $options[$value] = $text;
         }
-        $this->RegisterVariableInteger($Ident, $this->Translate($caption), [
+        return $options;
+    }
+
+    private function RegisterProgramVariable(): void
+    {
+        $programs = $this->GetPrograms();
+        $options = [['Value' => 0, 'Caption' => '-', 'IconActive' => false, 'IconValue' => '', 'Color' => -1]];
+        foreach ($programs as $index => $program) {
+            $options[] = ['Value' => $index + 1, 'Caption' => trim($program['Name']), 'IconActive' => true, 'IconValue' => 'play', 'Color' => -1];
+        }
+        $this->MaintainVariable('Program', $this->Translate('Start program'), VARIABLETYPE_INTEGER, [
             'PRESENTATION' => VARIABLE_PRESENTATION_ENUMERATION,
-            'ICON'         => $icon,
+            'ICON'         => 'list-check',
+            'LAYOUT'       => 1,
             'OPTIONS'      => json_encode($options)
-        ], $position);
-        $this->EnableAction($Ident);
+        ], 12, count($programs) > 0);
+        if (count($programs) > 0) {
+            $this->EnableAction('Program');
+        }
     }
 
     /**
