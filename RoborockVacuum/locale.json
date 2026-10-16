@@ -64,6 +64,7 @@
             "Programs": "Programme",
             "Rooms": "Räume",
             "Unchanged": "Unverändert",
+            "Rooms in cleaning order (empty = whole map)": "Räume in Reinigungsreihenfolge (leer = ganze Karte)",
             "Active map": "Aktive Karte",
             "Rooms (comma separated, empty = whole map):": "Räume (mit Komma getrennt, leer = ganze Karte):",
             "The rooms are shown after the first update of the robot.": "Die Räume werden nach der ersten Aktualisierung des Roboters angezeigt.",

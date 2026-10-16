@@ -185,39 +185,16 @@ class RoborockVacuum extends IPSModuleStrict
     private function FillProgramElements(array &$Elements): void
     {
         $maps = json_decode($this->ReadAttributeString('Maps'), true) ?: [];
-        $unchanged = ['caption' => $this->Translate('Unchanged'), 'value' => -1];
         foreach ($Elements as &$element) {
             if (isset($element['items'])) {
                 $this->FillProgramElements($element['items']);
             }
             switch ($element['name'] ?? '') {
                 case 'Programs':
+                    $element['form'] = 'return json_decode(RRV_UIProgramForm($id, (int) ($Programs[\'Map\'] ?? -1), (string) ($Programs[\'Rooms\'] ?? \'\')), true);';
                     foreach ($element['columns'] as &$column) {
-                        $options = null;
-                        switch ($column['name']) {
-                            case 'Map':
-                                $options = [['caption' => $this->Translate('Active map'), 'value' => -1]];
-                                foreach ($maps as $flag => $map) {
-                                    $options[] = ['caption' => $map['name'], 'value' => (int) $flag];
-                                }
-                                break;
-                            case 'CleanMode':
-                                $options = [$unchanged];
-                                foreach ($this->GetCleanModes() as $value => [$caption]) {
-                                    $options[] = ['caption' => $caption, 'value' => $value];
-                                }
-                                break;
-                            case 'FanPower':
-                            case 'WaterBoxMode':
-                            case 'MopMode':
-                                $options = [$unchanged];
-                                foreach ($this->GetModeOptions($column['name']) as $value => $caption) {
-                                    $options[] = ['caption' => $caption, 'value' => $value];
-                                }
-                                break;
-                        }
-                        if ($options !== null) {
-                            $column['edit']['options'] = $options;
+                        if (in_array($column['name'], ['Map', 'CleanMode', 'FanPower', 'WaterBoxMode', 'MopMode', 'Passes'], true)) {
+                            $column['edit']['options'] = $this->GetProgramOptions($column['name']);
                         }
                     }
                     break;
@@ -237,6 +214,56 @@ class RoborockVacuum extends IPSModuleStrict
                     break;
             }
         }
+    }
+
+    /**
+     * Maps for the programs: -1 = active map, then all maps of the robot. Rooms as segment => name.
+     */
+    private function GetProgramMaps(): array
+    {
+        $maps = [-1 => [
+            'name'  => $this->Translate('Active map'),
+            'rooms' => json_decode($this->ReadAttributeString('Rooms'), true) ?: []
+        ]];
+        foreach (json_decode($this->ReadAttributeString('Maps'), true) ?: [] as $flag => $map) {
+            $maps[(int) $flag] = ['name' => $map['name'], 'rooms' => array_filter($map['rooms'])];
+        }
+        return $maps;
+    }
+
+    private function RoomFieldName(int $Map, string $Segment): string
+    {
+        return 'ProgramRoom' . ($Map < 0 ? 'A' : (string) $Map) . '_' . $Segment;
+    }
+
+    private function GetProgramOptions(string $Ident): array
+    {
+        $unchanged = ['caption' => $this->Translate('Unchanged'), 'value' => -1];
+        $options = [];
+        switch ($Ident) {
+            case 'Map':
+                foreach ($this->GetProgramMaps() as $flag => $map) {
+                    $options[] = ['caption' => $map['name'], 'value' => $flag];
+                }
+                break;
+            case 'CleanMode':
+                $options[] = $unchanged;
+                foreach ($this->GetCleanModes() as $value => [$caption]) {
+                    $options[] = ['caption' => $caption, 'value' => $value];
+                }
+                break;
+            case 'Passes':
+                foreach ([1, 2, 3] as $value) {
+                    $options[] = ['caption' => $value . 'x', 'value' => $value];
+                }
+                break;
+            default:
+                $options[] = $unchanged;
+                foreach ($this->GetModeOptions($Ident) as $value => $caption) {
+                    $options[] = ['caption' => $caption, 'value' => $value];
+                }
+        }
+        return $options;
     }
 
     private function CheckPrograms(array $Maps): array
@@ -407,6 +434,88 @@ class RoborockVacuum extends IPSModuleStrict
             throw new Exception(sprintf($this->Translate('Unknown rooms on the current map: %s (available: %s)'), implode(', ', $missing), implode(', ', $rooms)));
         }
         $this->CleanSegments($segments, (int) $this->GetValue('Passes'));
+    }
+
+    /**
+     * Edit dialog of a cleaning program: one checkbox per room for every map, the checked rooms are
+     * written into the field "Rooms" in the order of clicking.
+     */
+    public function UIProgramForm(int $Map, string $Rooms): string
+    {
+        $maps = $this->GetProgramMaps();
+        $selected = array_map('mb_strtolower', array_map('trim', explode(',', $Rooms)));
+
+        // Script for every checkbox and the map selection: collects the checkboxes per map
+        $collect = [];
+        foreach ($maps as $flag => $map) {
+            $entries = [];
+            foreach (array_keys($map['rooms']) as $segment) {
+                $entries[] = var_export((string) $segment, true) . ' => ($' . $this->RoomFieldName($flag, (string) $segment) . ' ?? false)';
+            }
+            $collect[] = var_export((string) $flag, true) . ' => [' . implode(', ', $entries) . ']';
+        }
+        $onChange = '$rooms = [' . implode(', ', $collect) . ']; RRV_UIProgramRoomsChanged($id, json_encode($rooms[(string) $Map] ?? []), (int) $Map, $Rooms);';
+
+        $mapOptions = [];
+        foreach ($maps as $flag => $map) {
+            $items = [];
+            foreach ($map['rooms'] as $segment => $name) {
+                $items[] = [
+                    'type'     => 'CheckBox',
+                    'name'     => $this->RoomFieldName($flag, (string) $segment),
+                    'caption'  => $name,
+                    'value'    => ($flag === $Map) && in_array(mb_strtolower($name), $selected, true),
+                    'onChange' => $onChange
+                ];
+            }
+            $mapOptions[] = ['caption' => $map['name'], 'value' => $flag, 'items' => $items];
+        }
+
+        $form = [
+            ['type' => 'ValidationTextBox', 'name' => 'Name', 'caption' => $this->Translate('Name'), 'validate' => '^\\s*\\S.*$', 'width' => '400px'],
+            ['type' => 'Select', 'name' => 'Map', 'caption' => $this->Translate('Map'), 'value' => $Map, 'options' => $mapOptions, 'onChange' => $onChange],
+            ['type' => 'ValidationTextBox', 'name' => 'Rooms', 'caption' => $this->Translate('Rooms in cleaning order (empty = whole map)'), 'width' => '400px']
+        ];
+        foreach ([
+            'CleanMode'    => 'Cleaning mode',
+            'FanPower'     => 'Suction power',
+            'WaterBoxMode' => 'Water flow',
+            'MopMode'      => 'Mop route'
+        ] as $ident => $caption) {
+            $form[] = ['type' => 'Select', 'name' => $ident, 'caption' => $this->Translate($caption), 'options' => $this->GetProgramOptions($ident)];
+        }
+        $form[] = ['type' => 'Select', 'name' => 'Passes', 'caption' => $this->Translate('Passes'), 'options' => $this->GetProgramOptions('Passes')];
+        return json_encode($form);
+    }
+
+    /**
+     * Updates the field "Rooms" of the edit dialog: keeps the order of rooms that stay checked and appends new ones.
+     */
+    public function UIProgramRoomsChanged(string $Checked, int $Map, string $Rooms): void
+    {
+        $maps = $this->GetProgramMaps();
+        $names = $maps[$Map]['rooms'] ?? [];
+        $checked = [];
+        foreach (json_decode($Checked, true) ?: [] as $segment => $value) {
+            if ($value && isset($names[$segment])) {
+                $checked[] = $names[$segment];
+            }
+        }
+        $result = [];
+        foreach (explode(',', $Rooms) as $name) {
+            $name = trim($name);
+            foreach ($checked as $candidate) {
+                if (mb_strtolower($candidate) === mb_strtolower($name) && !in_array($candidate, $result, true)) {
+                    $result[] = $candidate;
+                }
+            }
+        }
+        foreach ($checked as $candidate) {
+            if (!in_array($candidate, $result, true)) {
+                $result[] = $candidate;
+            }
+        }
+        $this->UpdateFormField('Rooms', 'value', implode(', ', $result));
     }
 
     /**
