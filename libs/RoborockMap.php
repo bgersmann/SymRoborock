@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 /**
  * Parser and renderer for Roborock V1 maps (get_map_v1).
- * Port of vacuum-map-parser-roborock (map_data_parser.py, image_parser.py).
+ *
+ * Ported to PHP and modified from vacuum-map-parser-roborock by Piotr Machowski (map_data_parser.py,
+ * image_parser.py), https://github.com/PiotrMachowski/Python-package-vacuum-map-parser-roborock,
+ * licensed under the Apache License, Version 2.0. See LICENSE and NOTICE.
  */
 class RoborockMap
 {

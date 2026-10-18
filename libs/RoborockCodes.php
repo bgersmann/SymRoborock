@@ -3,8 +3,11 @@
 declare(strict_types=1);
 
 /**
- * Code tables of V1 devices (python-roborock: roborock/data/v1/v1_code_mappings.py).
- * The captions are English and get translated via the locale.json of the module.
+ * Code tables of V1 devices. The captions are English and get translated via the locale.json of the module.
+ *
+ * Taken and modified from python-roborock (roborock/data/v1/v1_code_mappings.py),
+ * https://github.com/Python-roborock/python-roborock,
+ * licensed under the Apache License, Version 2.0. See LICENSE and NOTICE.
  */
 class RoborockCodes
 {

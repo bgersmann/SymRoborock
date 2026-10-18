@@ -4,6 +4,13 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../libs/RoborockProtocol.php';
 
+/**
+ * Login, cloud API and MQTT connection of a Roborock account.
+ *
+ * The login flow, the Hawk authentication and the MQTT credentials are ported to PHP and modified from
+ * python-roborock (roborock/web_api.py, roborock/mqtt), https://github.com/Python-roborock/python-roborock,
+ * licensed under the Apache License, Version 2.0. See LICENSE and NOTICE.
+ */
 class RoborockCloud extends IPSModuleStrict
 {
     private const BASE_URLS = [
@@ -23,6 +30,9 @@ class RoborockCloud extends IPSModuleStrict
     private const LOCAL_HOST_LIFETIME = 43200;
     private const HOME_DATA_MIN_INTERVAL = 60;
     private const CLOUD_RECONNECT_INTERVAL = 300;
+    // The broker closes sessions after 3 hours or more ("End of file" warning of the client socket),
+    // so the session is renewed cleanly before
+    private const SESSION_RENEW_INTERVAL = 9900;
 
     // Connection state of the cloud for the children
     private const CLOUD_DISCONNECTED = 0;
@@ -77,7 +87,9 @@ class RoborockCloud extends IPSModuleStrict
         $this->SetTimerInterval('KeepAlive', 30 * 1000);
         $this->SetStatus(102);
         if (!$parentChanged && $this->HasActiveParent() && $this->GetBuffer('MqttConnected') !== '1') {
-            $this->MqttConnect();
+            // State unknown (e.g. after a module update): a CONNECT on a running session would make the broker close
+            // the connection with a warning, so the socket is reopened cleanly
+            $this->RenewSession();
         }
     }
 
@@ -551,7 +563,30 @@ class RoborockCloud extends IPSModuleStrict
             $this->MqttSend(RoborockProtocol::MqttDisconnect());
             return;
         }
+        if (time() - (int) $this->GetBuffer('MqttSessionStart') >= self::SESSION_RENEW_INTERVAL) {
+            $this->RenewSession();
+            return;
+        }
         $this->MqttSend(RoborockProtocol::MqttPing());
+    }
+
+    /**
+     * Closes and reopens the client socket. Closing it ourselves only creates normal messages in the log,
+     * while a connection closed by the broker is logged as warning by the client socket.
+     */
+    private function RenewSession(): void
+    {
+        $parent = $this->GetParentID();
+        if ($parent === 0 || !IPS_InstanceExists($parent) || IPS_GetInstance($parent)['ModuleInfo']['ModuleID'] !== self::CLIENT_SOCKET) {
+            return;
+        }
+        $this->SendDebug('MQTT', 'Renewing the session', 0);
+        $this->SetMqttConnected(false);
+        $this->SetBuffer('MqttSessionStart', (string) time());
+        IPS_SetProperty($parent, 'Open', false);
+        IPS_ApplyChanges($parent);
+        IPS_SetProperty($parent, 'Open', true);
+        IPS_ApplyChanges($parent);
     }
 
     private function HandleMqttPacket(array $Packet): void
@@ -665,6 +700,7 @@ class RoborockCloud extends IPSModuleStrict
     {
         $this->SetBuffer('MqttConnected', $Connected ? '1' : '0');
         if ($Connected) {
+            $this->SetBuffer('MqttSessionStart', (string) time());
             $this->SetBuffer('CloudTimeouts', '0');
             $this->SetBuffer('MqttLastRx', (string) time());
             $this->SetBuffer('Nonce', bin2hex(random_bytes(16)));

@@ -1,0 +1,23 @@
+SymRoborock
+Copyright 2026 BGersmann
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It contains code ported to PHP from the following projects, which are also
+licensed under the Apache License, Version 2.0:
+
+- python-roborock
+  https://github.com/Python-roborock/python-roborock
+  Used for: login and cloud API (RoborockCloud/module.php), message protocol,
+  encryption, local and MQTT transport (libs/RoborockProtocol.php) and the
+  code tables of V1 devices (libs/RoborockCodes.php).
+
+- vacuum-map-parser-roborock (Piotr Machowski)
+  https://github.com/PiotrMachowski/Python-package-vacuum-map-parser-roborock
+  Used for: parsing the map data (libs/RoborockMap.php).
+
+The behaviour of the Home Assistant Roborock integration
+(https://github.com/home-assistant/core, Apache License 2.0) served as a
+reference; no code was taken from it.
+
+All ported parts were rewritten in PHP and adapted for IP-Symcon.

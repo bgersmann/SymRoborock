@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 /**
  * Roborock message protocol (V1 "1.0" and local "L01") and a minimal MQTT 3.1.1 packet codec.
- * Based on python-roborock (roborock/protocol.py, roborock_message.py, protocols/v1_protocol.py).
+ *
+ * Ported to PHP and modified from python-roborock (roborock/protocol.py, roborock_message.py,
+ * protocols/v1_protocol.py), https://github.com/Python-roborock/python-roborock,
+ * licensed under the Apache License, Version 2.0. See LICENSE and NOTICE.
  */
 class RoborockProtocol
 {

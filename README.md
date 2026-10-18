@@ -11,6 +11,7 @@ Bibliothek [python-roborock](https://github.com/Python-roborock/python-roborock)
 3. [Module](#3-module)
 4. [Einrichtung](#4-einrichtung)
 5. [Funktionsweise](#5-funktionsweise)
+6. [Lizenz](#6-lizenz)
 
 ### 1. Funktionsumfang
 
@@ -59,3 +60,17 @@ Roborock Konfigurator ─┴─ Roborock Cloud ── Client Socket (TLS) ──
 - Die Cloud-Instanz konfiguriert ihren Client Socket selbst mit dem MQTT-Broker des Kontos.
 - Befehle gehen bevorzugt lokal an den Saugroboter. Die IP-Adresse wird automatisch über die Cloud ermittelt
   (oder in der Geräteinstanz fest eingetragen). Ist der Roboter lokal nicht erreichbar, wird die Cloud genutzt.
+
+### 6. Lizenz
+
+Diese Bibliothek steht unter der [Apache License 2.0](LICENSE).
+
+Teile des Codes sind PHP-Portierungen folgender Projekte, die ebenfalls unter der Apache License 2.0 stehen:
+
+- [python-roborock](https://github.com/Python-roborock/python-roborock): Anmeldung, Cloud-API, Protokoll, Verschlüsselung, Code-Tabellen
+- [vacuum-map-parser-roborock](https://github.com/PiotrMachowski/Python-package-vacuum-map-parser-roborock) von Piotr Machowski: Auslesen der Karte
+
+Die [Home-Assistant-Integration](https://github.com/home-assistant/core/tree/dev/homeassistant/components/roborock) diente als Referenz für das Verhalten.
+Details stehen in der Datei [NOTICE](NOTICE).
+
+Roborock ist eine Marke der Beijing Roborock Technology Co., Ltd. Dieses Projekt ist nicht mit Roborock verbunden.
