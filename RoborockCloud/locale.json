@@ -43,6 +43,8 @@
             "Use the Roborock Configurator to create the vacuum instances.": "Lege die Saugroboter-Instanzen über den Roborock Konfigurator an.",
             "%d devices found": "%d Geräte gefunden",
             "Configure interface": "Schnittstelle konfigurieren",
+            "Active (switched on after the login)": "Aktiv (wird nach der Anmeldung eingeschaltet)",
+            "Host (entered after the login in Roborock Cloud)": "Host (wird nach der Anmeldung in der Roborock Cloud eingetragen)",
             "Please apply the configuration of the interface (client socket)": "Bitte die Konfiguration der Schnittstelle (Client Socket) übernehmen",
             "No interface (client socket) is connected. Please connect one via \"Gateway\".": "Es ist keine Schnittstelle (Client Socket) verbunden. Bitte über \"Gateway\" eine verbinden.",
             "The interface (client socket) does not match the account yet. Please open it with the button below and click \"Apply changes\" there, the required values are already entered.": "Die Schnittstelle (Client Socket) passt noch nicht zum Konto. Bitte über den Knopf darunter öffnen und dort \"Änderungen übernehmen\" klicken, die nötigen Werte sind bereits eingetragen.",

@@ -37,6 +37,9 @@ Welche Geräte unterstützt werden, steht in der [Übersicht der Bibliothek](../
 
 ### 4. Einrichtung
 
+Beim Anlegen fragt Symcon nach der Konfiguration des Client Socket. Dort sind alle Werte vorgegeben und gesperrt, der Dialog wird
+einfach mit **OK** bestätigt. Der Server des Kontos ist erst nach der Anmeldung bekannt.
+
 Solange kein Konto angemeldet ist, öffnet sich beim Öffnen der Konfiguration der Anmelde-Assistent:
 
 1. **Roborock-Konto**: E-Mail-Adresse des Kontos der Roborock-App und Region (normalerweise *Automatisch*).

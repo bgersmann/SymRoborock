@@ -4,8 +4,7 @@
     "type": 4,
     "vendor": "Roborock",
     "aliases": [
-        "Roborock Configurator",
-        "Roborock Konfigurator"
+        "Roborock Configurator"
     ],
     "url": "https://github.com/bgersmann/SymRoborock",
     "parentRequirements": [

@@ -4,8 +4,7 @@
     "type": 3,
     "vendor": "Roborock",
     "aliases": [
-        "Roborock Vacuum",
-        "Roborock Saugroboter"
+        "Roborock Vacuum"
     ],
     "url": "https://github.com/bgersmann/SymRoborock",
     "parentRequirements": [

@@ -56,6 +56,8 @@ Modul-URL: `https://github.com/bgersmann/SymRoborock`
 
 1. Über den Module Store oder Module Control (URL siehe oben) die Bibliothek installieren.
 2. Instanz **Roborock Konfigurator** hinzufügen. Symcon legt dabei die **Roborock Cloud** und einen **Client Socket** an.
+   Den Dialog *Schnittstelle konfigurieren* einfach mit **OK** bestätigen: Alle Werte sind vorgegeben, der Server wird erst nach der
+   Anmeldung eingetragen.
 3. In der Roborock Cloud öffnet sich der Anmelde-Assistent automatisch:
    E-Mail-Adresse eingeben, den per E-Mail erhaltenen Code eintragen.
 4. Im letzten Schritt des Assistenten bzw. in der Roborock Cloud über **Schnittstelle konfigurieren** den Client Socket öffnen

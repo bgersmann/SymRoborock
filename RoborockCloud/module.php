@@ -146,14 +146,29 @@ class RoborockCloud extends IPSModuleStrict
 
     public function GetCompatibleParents(): string
     {
-        return json_encode(['type' => 'require', 'moduleIDs' => [self::CLIENT_SOCKET]]);
+        // The dialog for the new client socket explains that the broker is entered after the login
+        return json_encode(['type' => 'require', 'modules' => [[
+            'moduleID'     => self::CLIENT_SOCKET,
+            'formOverride' => [
+                'Open' => ['caption' => $this->Translate('Active (switched on after the login)')],
+                'Host' => ['caption' => $this->Translate('Host (entered after the login in Roborock Cloud)')]
+            ]
+        ]]]);
     }
 
     public function GetConfigurationForParent(): string
     {
         $userData = $this->GetUserData();
         if ($userData === null) {
-            return json_encode(['Open' => false]);
+            // Before the login only the server is unknown, everything else is fixed
+            return json_encode([
+                'Host'       => '',
+                'Port'       => 8883,
+                'UseSSL'     => true,
+                'VerifyPeer' => true,
+                'VerifyHost' => true,
+                'Open'       => false
+            ]);
         }
         $broker = parse_url($userData['rriot']['r']['m'] ?? '');
         return json_encode([
@@ -188,7 +203,8 @@ class RoborockCloud extends IPSModuleStrict
 
         // Hint and button to apply the broker in the client socket
         $parent = $this->GetParentID();
-        $configured = $this->IsParentConfigured();
+        // Before the login the broker is unknown, the user is guided after the login
+        $configured = ($parent > 0 && !$loggedIn) || $this->IsParentConfigured();
         foreach ($form['elements'] as &$element) {
             if (($element['name'] ?? '') === 'SocketHint') {
                 $element['visible'] = !$configured;
