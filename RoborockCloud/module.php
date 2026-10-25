@@ -30,9 +30,6 @@ class RoborockCloud extends IPSModuleStrict
     private const LOCAL_HOST_LIFETIME = 43200;
     private const HOME_DATA_MIN_INTERVAL = 60;
     private const CLOUD_RECONNECT_INTERVAL = 300;
-    // The broker closes sessions after 3 hours or more ("End of file" warning of the client socket),
-    // so the session is renewed cleanly before
-    private const SESSION_RENEW_INTERVAL = 9900;
 
     // Connection state of the cloud for the children
     private const CLOUD_DISCONNECTED = 0;
@@ -72,8 +69,6 @@ class RoborockCloud extends IPSModuleStrict
         }
 
         $this->RegisterParentStatus();
-        // A changed socket configuration reconnects and triggers the MQTT connect via IM_CHANGESTATUS
-        $parentChanged = $this->ReconnectParent();
 
         if (!$this->IsLoggedIn()) {
             $this->SetTimerInterval('KeepAlive', 0);
@@ -85,12 +80,40 @@ class RoborockCloud extends IPSModuleStrict
 
         $this->SetSummary($this->ReadAttributeString('Email'));
         $this->SetTimerInterval('KeepAlive', 30 * 1000);
-        $this->SetStatus(102);
-        if (!$parentChanged && $this->HasActiveParent() && $this->GetBuffer('MqttConnected') !== '1') {
-            // State unknown (e.g. after a module update): a CONNECT on a running session would make the broker close
-            // the connection with a warning, so the socket is reopened cleanly
-            $this->RenewSession();
+        if ($this->UpdateParentStatus() && $this->HasActiveParent() && $this->GetBuffer('MqttConnected') !== '1') {
+            $this->MqttConnect();
         }
+    }
+
+    /**
+     * The broker depends on the account. The module must not change the client socket itself, so the user applies
+     * the configuration of GetConfigurationForParent in the socket. Returns true if the socket is configured.
+     */
+    private function UpdateParentStatus(): bool
+    {
+        if (!$this->IsParentConfigured()) {
+            $this->SetStatus(203);
+            return false;
+        }
+        if ($this->GetStatus() !== 202) {
+            $this->SetStatus(102);
+        }
+        return true;
+    }
+
+    private function IsParentConfigured(): bool
+    {
+        $parent = $this->GetParentID();
+        if ($parent === 0 || !IPS_InstanceExists($parent)) {
+            return false;
+        }
+        $configuration = json_decode(IPS_GetConfiguration($parent), true);
+        foreach (json_decode($this->GetConfigurationForParent(), true) as $property => $value) {
+            if (!array_key_exists($property, $configuration) || $configuration[$property] != $value) {
+                return false;
+            }
+        }
+        return true;
     }
 
     public function MessageSink(int $TimeStamp, int $SenderID, int $Message, array $Data): void
@@ -102,17 +125,19 @@ class RoborockCloud extends IPSModuleStrict
             case FM_CONNECT:
             case FM_DISCONNECT:
                 $this->RegisterParentStatus();
-                if ($Message === FM_CONNECT) {
-                    $this->ReconnectParent();
+                if ($this->IsLoggedIn()) {
+                    $this->UpdateParentStatus();
                 }
                 break;
             case IM_CHANGESTATUS:
+            case IM_CHANGESETTINGS:
                 if ($SenderID !== $this->GetParentID()) {
                     break;
                 }
+                // New connection of the socket: a new MQTT session is required
                 $this->SetMqttConnected(false);
                 $this->SetBuffer('MqttRx', '');
-                if ($Data[0] === IS_ACTIVE && $this->IsLoggedIn()) {
+                if ($this->IsLoggedIn() && $this->UpdateParentStatus() && $this->HasActiveParent()) {
                     $this->MqttConnect();
                 }
                 break;
@@ -160,6 +185,23 @@ class RoborockCloud extends IPSModuleStrict
         } else {
             $form['elements'][1]['visible'] = false;
         }
+
+        // Hint and button to apply the broker in the client socket
+        $parent = $this->GetParentID();
+        $configured = $this->IsParentConfigured();
+        foreach ($form['elements'] as &$element) {
+            if (($element['name'] ?? '') === 'SocketHint') {
+                $element['visible'] = !$configured;
+                $element['caption'] = ($parent === 0)
+                    ? $this->Translate('No interface (client socket) is connected. Please connect one via "Gateway".')
+                    : $this->Translate('The interface (client socket) does not match the account yet. Please open it with the button below and click "Apply changes" there, the required values are already entered.');
+            }
+            if (($element['name'] ?? '') === 'SocketButton') {
+                $element['visible'] = !$configured && $parent > 0;
+                $element['objectID'] = $parent;
+            }
+        }
+        unset($element);
 
         foreach ($form['actions'] as &$action) {
             if (($action['name'] ?? '') === 'LoginWizard') {
@@ -360,6 +402,10 @@ class RoborockCloud extends IPSModuleStrict
             ],
             'values' => $values
         ];
+        if (!$this->IsParentConfigured() && $this->GetParentID() > 0) {
+            $items[] = ['type' => 'Label', 'caption' => $this->Translate('Last step: Open the interface (client socket) and click "Apply changes" there. The address of the Roborock server is already entered.')];
+            $items[] = ['type' => 'OpenObjectButton', 'caption' => $this->Translate('Configure interface'), 'objectID' => $this->GetParentID()];
+        }
         $items[] = ['type' => 'Label', 'caption' => $this->Translate('Use the Roborock Configurator to create the vacuum instances.')];
         return json_encode($items);
     }
@@ -539,15 +585,7 @@ class RoborockCloud extends IPSModuleStrict
             return;
         }
         if (!$this->HasActiveParent()) {
-            // E.g. after standby the broker has closed the connection: reopen the socket instead of waiting for the
-            // reconnect of the event control (60 seconds)
-            $parent = $this->GetParentID();
-            if ($parent > 0 && IPS_InstanceExists($parent) && IPS_GetInstance($parent)['InstanceStatus'] >= IS_EBASE
-                && IPS_GetProperty($parent, 'Open') && time() - (int) $this->GetBuffer('ReopenTime') >= 30) {
-                $this->SetBuffer('ReopenTime', (string) time());
-                $this->SendDebug('MQTT', 'Socket in error state, reopening', 0);
-                IPS_ApplyChanges($parent);
-            }
+            // The client socket reconnects by itself (event control)
             return;
         }
         if ($this->GetBuffer('MqttConnected') !== '1') {
@@ -563,30 +601,7 @@ class RoborockCloud extends IPSModuleStrict
             $this->MqttSend(RoborockProtocol::MqttDisconnect());
             return;
         }
-        if (time() - (int) $this->GetBuffer('MqttSessionStart') >= self::SESSION_RENEW_INTERVAL) {
-            $this->RenewSession();
-            return;
-        }
         $this->MqttSend(RoborockProtocol::MqttPing());
-    }
-
-    /**
-     * Closes and reopens the client socket. Closing it ourselves only creates normal messages in the log,
-     * while a connection closed by the broker is logged as warning by the client socket.
-     */
-    private function RenewSession(): void
-    {
-        $parent = $this->GetParentID();
-        if ($parent === 0 || !IPS_InstanceExists($parent) || IPS_GetInstance($parent)['ModuleInfo']['ModuleID'] !== self::CLIENT_SOCKET) {
-            return;
-        }
-        $this->SendDebug('MQTT', 'Renewing the session', 0);
-        $this->SetMqttConnected(false);
-        $this->SetBuffer('MqttSessionStart', (string) time());
-        IPS_SetProperty($parent, 'Open', false);
-        IPS_ApplyChanges($parent);
-        IPS_SetProperty($parent, 'Open', true);
-        IPS_ApplyChanges($parent);
     }
 
     private function HandleMqttPacket(array $Packet): void
@@ -700,7 +715,6 @@ class RoborockCloud extends IPSModuleStrict
     {
         $this->SetBuffer('MqttConnected', $Connected ? '1' : '0');
         if ($Connected) {
-            $this->SetBuffer('MqttSessionStart', (string) time());
             $this->SetBuffer('CloudTimeouts', '0');
             $this->SetBuffer('MqttLastRx', (string) time());
             $this->SetBuffer('Nonce', bin2hex(random_bytes(16)));
@@ -1134,30 +1148,14 @@ class RoborockCloud extends IPSModuleStrict
         }
         if ($oldParent > 0) {
             $this->UnregisterMessage($oldParent, IM_CHANGESTATUS);
+            $this->UnregisterMessage($oldParent, IM_CHANGESETTINGS);
         }
         if ($parent > 0) {
             $this->RegisterMessage($parent, IM_CHANGESTATUS);
+            // The user applies the configuration of the socket, it reconnects without changing its status
+            $this->RegisterMessage($parent, IM_CHANGESETTINGS);
         }
         $this->SetBuffer('ParentID', (string) $parent);
     }
 
-    private function ReconnectParent(): bool
-    {
-        // The broker depends on the account, so the client socket gets the configuration of GetConfigurationForParent
-        $parent = $this->GetParentID();
-        if ($parent === 0 || !IPS_InstanceExists($parent) || IPS_GetInstance($parent)['ModuleInfo']['ModuleID'] !== self::CLIENT_SOCKET) {
-            return false;
-        }
-        $changed = false;
-        foreach (json_decode($this->GetConfigurationForParent(), true) as $property => $value) {
-            if (IPS_GetProperty($parent, $property) !== $value) {
-                IPS_SetProperty($parent, $property, $value);
-                $changed = true;
-            }
-        }
-        if ($changed) {
-            IPS_ApplyChanges($parent);
-        }
-        return $changed;
-    }
 }

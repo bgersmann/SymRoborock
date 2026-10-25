@@ -64,6 +64,7 @@
             "Programs": "Programme",
             "Rooms": "Räume",
             "Unchanged": "Unverändert",
+            "Name": "Name",
             "Rooms in cleaning order (empty = whole map)": "Räume in Reinigungsreihenfolge (leer = ganze Karte)",
             "Active map": "Aktive Karte",
             "Rooms (comma separated, empty = whole map):": "Räume (mit Komma getrennt, leer = ganze Karte):",

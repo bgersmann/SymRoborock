@@ -9,6 +9,19 @@
             "type": "Label",
             "name": "HomeLabel",
             "caption": ""
+        },
+        {
+            "type": "Label",
+            "name": "SocketHint",
+            "caption": "",
+            "visible": false
+        },
+        {
+            "type": "OpenObjectButton",
+            "name": "SocketButton",
+            "caption": "Configure interface",
+            "objectID": 0,
+            "visible": false
         }
     ],
     "actions": [
@@ -104,6 +117,7 @@
     "status": [
         { "code": 104, "icon": "inactive", "caption": "Not logged in" },
         { "code": 201, "icon": "error", "caption": "The session has expired. Please log in again." },
-        { "code": 202, "icon": "error", "caption": "The cloud connection was refused" }
+        { "code": 202, "icon": "error", "caption": "The cloud connection was refused" },
+        { "code": 203, "icon": "inactive", "caption": "Please apply the configuration of the interface (client socket)" }
     ]
 }
