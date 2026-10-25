@@ -84,6 +84,22 @@ Die Funktionen mit dem Präfix `RRC_UI` werden vom Konfigurationsformular verwen
 
 ### 8. Hinweise
 
+**Datenschutz und Sicherheit**
+
+- Die Sitzung (Token und Zugangsdaten für die Cloud), die Geräteliste mit den lokalen Schlüsseln der Roboter und die E-Mail-Adresse
+  speichert Symcon als Attribute der Instanz im **Klartext** in der `settings.json`. Diese Datei und Backups davon sollten entsprechend
+  geschützt werden.
+- **Abmelden** löscht diese Daten nur in Symcon. Eine Schnittstelle zum Abmelden bzw. Ungültigmachen des Tokens bei Roborock ist nicht
+  bekannt, das Token bleibt bei Roborock daher gültig. Ob eine Passwortänderung oder das Abmelden in der Roborock-App bestehende Tokens
+  sperrt, ist nicht dokumentiert.
+- Die Instanz baut die MQTT-Verbindung zur Roborock-Cloud immer auf, auch wenn alle Saugroboter auf *Nur lokales Netzwerk* stehen.
+  Über sie kommen Statusmeldungen und Karten, und die IP-Adressen der Roboter werden darüber ermittelt.
+- Verbindungen gehen nur per HTTPS an Server unter `roborock.com`. Lokale Verbindungen sind nur zu privaten IP-Adressen möglich.
+- In der Debug-Ausgabe werden IP-Adresse, WLAN-Name (SSID), BSSID und MAC-Adresse unkenntlich gemacht, in der Zusammenfassung der
+  Instanz wird die E-Mail-Adresse gekürzt angezeigt.
+
+**Verbindungsabbrüche**
+
 - Der Roborock-Server beendet MQTT-Verbindungen nach einigen Stunden sowie nachts. Der Client Socket meldet das als Warnung
   *Fehler beim Lesen: End of file* bzw. *Connection reset by peer* und verbindet sich nach etwa einer Minute selbst neu.
   Befehle laufen in dieser Zeit weiter über die lokale Verbindung.

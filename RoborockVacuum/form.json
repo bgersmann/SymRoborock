@@ -19,7 +19,8 @@
         {
             "type": "ValidationTextBox",
             "name": "Host",
-            "caption": "IP address (empty = detect automatically)"
+            "caption": "IP address (empty = detect automatically)",
+            "validate": "^$|^(10\\.[0-9]{1,3}|192\\.168|172\\.(1[6-9]|2[0-9]|3[01]))\\.[0-9]{1,3}\\.[0-9]{1,3}$"
         },
         {
             "type": "NumberSpinner",
@@ -107,6 +108,7 @@
     ],
     "status": [
         { "code": 104, "icon": "inactive", "caption": "Please enter the device ID or create the instance via the configurator" },
-        { "code": 201, "icon": "error", "caption": "The vacuum is not reachable" }
+        { "code": 201, "icon": "error", "caption": "The vacuum is not reachable" },
+        { "code": 202, "icon": "error", "caption": "The IP address must be an address of the local network" }
     ]
 }

@@ -78,7 +78,7 @@ class RoborockCloud extends IPSModuleStrict
             return;
         }
 
-        $this->SetSummary($this->ReadAttributeString('Email'));
+        $this->SetSummary($this->MaskEmail($this->ReadAttributeString('Email')));
         $this->SetTimerInterval('KeepAlive', 30 * 1000);
         if ($this->UpdateParentStatus() && $this->HasActiveParent() && $this->GetBuffer('MqttConnected') !== '1') {
             $this->MqttConnect();
@@ -472,7 +472,12 @@ class RoborockCloud extends IPSModuleStrict
         try {
             switch ($data['Command'] ?? '') {
                 case 'GetDevices':
-                    return json_encode($this->GetDeviceList());
+                    // The local keys stay in this instance
+                    $devices = $this->GetDeviceList();
+                    foreach ($devices as &$device) {
+                        unset($device['localKey']);
+                    }
+                    return json_encode($devices);
                 case 'GetDevice':
                     $device = $this->FindDevice((string) $data['DUID']);
                     if ($device === null) {
@@ -502,7 +507,7 @@ class RoborockCloud extends IPSModuleStrict
                     }
                     return json_encode($this->CloudRpc((string) $data['DUID'], $device['localKey'], 'get_map_v1', [], true));
                 case 'GetRoutines':
-                    $response = $this->HawkRequest($this->RequireUserData(), '/user/scene/device/' . $data['DUID']);
+                    $response = $this->HawkRequest($this->RequireUserData(), '/user/scene/device/' . rawurlencode((string) $data['DUID']));
                     if (!($response['success'] ?? false)) {
                         throw new Exception('Routines could not be loaded: ' . json_encode($response));
                     }
@@ -676,7 +681,7 @@ class RoborockCloud extends IPSModuleStrict
             $this->SendDebug('MQTT', $DUID . ': ' . $e->getMessage(), 0);
             return;
         }
-        $this->SendDebug('MQTT ' . $DUID, $plain, 0);
+        $this->SendDebug('MQTT ' . $DUID, RoborockProtocol::MaskNetworkInfo($plain), 0);
         $decoded = RoborockProtocol::DecodeV1Payload($plain);
         if ($decoded['rpc'] !== null) {
             $this->StoreRpcResponse((string) $decoded['rpc']['id'], $decoded['rpc']);
@@ -798,10 +803,10 @@ class RoborockCloud extends IPSModuleStrict
         }
         try {
             $version = $this->GetBuffer('LocalVersion_' . $DUID);
-            $this->SendDebug('Local ' . $DUID, $Host . ' -> ' . $Method . ' ' . json_encode($Params), 0);
+            $this->SendDebug('Local ' . $DUID, $Method . ' ' . json_encode($Params), 0);
             $response = RoborockProtocol::LocalRpc($Host, $LocalKey, $Method, $Params, $version);
             $this->SetBuffer('LocalVersion_' . $DUID, $version);
-            $this->SendDebug('Local ' . $DUID, json_encode($response), 0);
+            $this->SendDebug('Local ' . $DUID, RoborockProtocol::MaskNetworkInfo(json_encode($response)), 0);
             return $response;
         } finally {
             IPS_SemaphoreLeave($semaphore);
@@ -901,6 +906,9 @@ class RoborockCloud extends IPSModuleStrict
     private function GetLocalHost(string $DUID): string
     {
         $hosts = json_decode($this->ReadAttributeString('LocalHosts'), true) ?: [];
+        if (isset($hosts[$DUID]) && !RoborockProtocol::IsPrivateIP((string) $hosts[$DUID]['ip'])) {
+            unset($hosts[$DUID]);
+        }
         if (isset($hosts[$DUID]) && (time() - $hosts[$DUID]['time']) < self::LOCAL_HOST_LIFETIME) {
             return $hosts[$DUID]['ip'];
         }
@@ -917,7 +925,11 @@ class RoborockCloud extends IPSModuleStrict
             $this->SendDebug('NetworkInfo', $e->getMessage(), 0);
             return $hosts[$DUID]['ip'] ?? '';
         }
-        $ip = $response['result']['ip'] ?? '';
+        $ip = (string) ($response['result']['ip'] ?? '');
+        if ($ip !== '' && !RoborockProtocol::IsPrivateIP($ip)) {
+            $this->SendDebug('NetworkInfo', 'Ignoring an address outside of the local network', 0);
+            return $hosts[$DUID]['ip'] ?? '';
+        }
         if ($ip !== '') {
             $hosts[$DUID] = ['ip' => $ip, 'time' => time()];
             $this->WriteAttributeString('LocalHosts', json_encode($hosts));
@@ -951,8 +963,13 @@ class RoborockCloud extends IPSModuleStrict
         if (($data['country'] ?? null) === null && ($data['countrycode'] ?? null) === null) {
             return null;
         }
+        // The server of the account must be a Roborock server, otherwise the known base URL is kept
+        $url = rtrim((string) ($data['url'] ?? ''), '/');
+        if ($FixedRegion || !$this->IsRoborockUrl($url)) {
+            $url = $BaseUrl;
+        }
         return [
-            'url'         => $FixedRegion ? $BaseUrl : rtrim((string) ($data['url'] ?? $BaseUrl), '/'),
+            'url'         => $url,
             'country'     => (string) ($data['country'] ?? ''),
             'countrycode' => (string) ($data['countrycode'] ?? '')
         ];
@@ -1005,7 +1022,11 @@ class RoborockCloud extends IPSModuleStrict
         }
         $prestr = implode(':', [$rriot['u'], $rriot['s'], $nonce, (string) $timestamp, md5($Path), $paramsHash, '']);
         $mac = base64_encode(hash_hmac('sha256', $prestr, $rriot['h'], true));
-        $url = rtrim($rriot['r']['a'], '/') . $Path . (count($Params) > 0 ? '?' . http_build_query($Params) : '');
+        $api = rtrim((string) ($rriot['r']['a'] ?? ''), '/');
+        if (!$this->IsRoborockUrl($api)) {
+            throw new Exception('Invalid API server of the account');
+        }
+        $url = $api . $Path . (count($Params) > 0 ? '?' . http_build_query($Params) : '');
         return $this->HttpRequest($Method, $url, [
             sprintf('Authorization: Hawk id="%s",s="%s",ts="%d",nonce="%s",mac="%s"', $rriot['u'], $rriot['s'], $timestamp, $nonce, $mac)
         ]);
@@ -1013,6 +1034,9 @@ class RoborockCloud extends IPSModuleStrict
 
     private function HttpRequest(string $Method, string $Url, array $Headers, ?array $Form = null): array
     {
+        if (!$this->IsRoborockUrl($Url)) {
+            throw new Exception('Only Roborock servers are allowed');
+        }
         $this->SendDebug('HTTP', $Method . ' ' . preg_replace('/email=[^&]+/', 'email=***', $Url), 0);
         $curl = curl_init($Url);
         curl_setopt_array($curl, [
@@ -1022,6 +1046,14 @@ class RoborockCloud extends IPSModuleStrict
             CURLOPT_CUSTOMREQUEST  => $Method,
             CURLOPT_HTTPHEADER     => $Headers
         ]);
+        // HTTPS only, also for redirects (CURLOPT_PROTOCOLS_STR replaces the deprecated bitmask options)
+        if (defined('CURLOPT_PROTOCOLS_STR')) {
+            curl_setopt($curl, CURLOPT_PROTOCOLS_STR, 'https');
+            curl_setopt($curl, CURLOPT_REDIR_PROTOCOLS_STR, 'https');
+        } else {
+            curl_setopt($curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+            curl_setopt($curl, CURLOPT_REDIR_PROTOCOLS, CURLPROTO_HTTPS);
+        }
         if ($Form !== null) {
             curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($Form));
         }
@@ -1061,6 +1093,25 @@ class RoborockCloud extends IPSModuleStrict
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
+
+    private function IsRoborockUrl(string $Url): bool
+    {
+        $parts = parse_url($Url);
+        if (!is_array($parts) || strtolower($parts['scheme'] ?? '') !== 'https' || !isset($parts['host'])) {
+            return false;
+        }
+        $host = strtolower($parts['host']);
+        return $host === 'roborock.com' || str_ends_with($host, '.roborock.com');
+    }
+
+    private function MaskEmail(string $Email): string
+    {
+        $at = strpos($Email, '@');
+        if ($at === false || $at === 0) {
+            return $Email === '' ? '' : '***';
+        }
+        return substr($Email, 0, 1) . '***' . substr($Email, $at);
+    }
 
     private function IsLoggedIn(): bool
     {

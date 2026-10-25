@@ -59,6 +59,10 @@ class RoborockMap
         $position = self::UInt16($Raw, 2);
         while ($position + 8 <= $length) {
             $headerLength = self::UInt16($Raw, $position + 2);
+            // A block header has at least type, header length and data length (8 bytes) and must be complete
+            if ($headerLength < 8 || $position + $headerLength > $length) {
+                break;
+            }
             $type = self::UInt16($Raw, $position);
             $dataLength = self::UInt32($Raw, $position + 4);
             $header = substr($Raw, $position, $headerLength);
@@ -110,7 +114,12 @@ class RoborockMap
                     break;
             }
             // The low byte of the header length is used, like in the reference parser
-            $position += $dataLength + ord($header[2]);
+            $step = $dataLength + ord($header[2]);
+            if ($step <= 0) {
+                // Invalid block, would never advance
+                break;
+            }
+            $position += $step;
         }
         return $map;
     }
@@ -128,6 +137,9 @@ class RoborockMap
         $width = $image['width'];
         $height = $image['height'];
         $pixels = $image['pixels'];
+        if ($width > 4096 || $height > 4096 || $width * $height > strlen($pixels)) {
+            throw new Exception('Invalid map image size');
+        }
 
         // Bounding box of the used area (display coordinates, y from the top)
         $minX = $width;

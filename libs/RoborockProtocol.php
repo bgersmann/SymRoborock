@@ -15,6 +15,9 @@ class RoborockProtocol
 
     public const LOCAL_PORT = 58867;
 
+    // Upper limit for MQTT packets and the receive buffer (maps are about 10-100 kB)
+    public const MQTT_MAX_PACKET = 2 * 1024 * 1024;
+
     public const PROTOCOL_HELLO_REQUEST = 0;
     public const PROTOCOL_HELLO_RESPONSE = 1;
     public const PROTOCOL_PING_REQUEST = 2;
@@ -204,6 +207,28 @@ class RoborockProtocol
     }
 
     // ---------------------------------------------------------------------
+    // Validation and masking
+    // ---------------------------------------------------------------------
+
+    /**
+     * Only addresses of the local network are accepted for the local connection.
+     */
+    public static function IsPrivateIP(string $IP): bool
+    {
+        return filter_var($IP, FILTER_VALIDATE_IP) !== false
+            && filter_var($IP, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE) === false;
+    }
+
+    /**
+     * Masks network details (IP, SSID, BSSID, MAC) in JSON texts before they are shown in the debug output.
+     */
+    public static function MaskNetworkInfo(string $Text): string
+    {
+        // Also matches the escaped form inside JSON strings, e.g. \"ip\":\"192.168.1.2\"
+        return (string) preg_replace('/(\\\\?)"(ip|ssid|bssid|mac)\\\\?"\s*:\s*\\\\?"[^"\\\\]*\\\\?"/i', '$1"$2$1":$1"***$1"', $Text);
+    }
+
+    // ---------------------------------------------------------------------
     // Local TCP connection (port 58867)
     // ---------------------------------------------------------------------
 
@@ -213,6 +238,9 @@ class RoborockProtocol
      */
     public static function LocalRpc(string $Host, string $LocalKey, string $Method, $Params, string &$Version, float $Timeout = 5.0)
     {
+        if (!self::IsPrivateIP($Host)) {
+            throw new Exception('Only private IP addresses are allowed for the local connection');
+        }
         $versions = ($Version === '') ? ['1.0', 'L01'] : [$Version];
         $lastError = null;
         foreach ($versions as $tryVersion) {
@@ -380,7 +408,13 @@ class RoborockProtocol
                     throw new Exception('Malformed MQTT length');
                 }
             } while (($byte & 128) !== 0);
+            if ($length > self::MQTT_MAX_PACKET) {
+                throw new Exception('MQTT packet too large');
+            }
             if (strlen($Buffer) < $position + $length) {
+                if (strlen($Buffer) > self::MQTT_MAX_PACKET + 5) {
+                    throw new Exception('MQTT receive buffer too large');
+                }
                 return $packets;
             }
             $first = ord($Buffer[0]);
@@ -400,13 +434,22 @@ class RoborockProtocol
     public static function MqttDecodePublish(array $Packet): array
     {
         $body = $Packet['body'];
-        $topicLength = unpack('n', substr($body, 0, 2))[1];
+        if (strlen($body) < 2) {
+            throw new Exception('MQTT PUBLISH packet too short');
+        }
+        $topicLength = unpack('n', $body)[1];
+        if (strlen($body) < 2 + $topicLength) {
+            throw new Exception('MQTT PUBLISH topic incomplete');
+        }
         $topic = substr($body, 2, $topicLength);
         $offset = 2 + $topicLength;
         $qos = ($Packet['flags'] >> 1) & 3;
         $packetID = 0;
         if ($qos > 0) {
-            $packetID = unpack('n', substr($body, $offset, 2))[1];
+            if (strlen($body) < $offset + 2) {
+                throw new Exception('MQTT PUBLISH packet ID missing');
+            }
+            $packetID = unpack('n', $body, $offset)[1];
             $offset += 2;
         }
         return ['topic' => $topic, 'payload' => substr($body, $offset), 'qos' => $qos, 'packetID' => $packetID];

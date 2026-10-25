@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../libs/RoborockCodes.php';
 require_once __DIR__ . '/../libs/RoborockMap.php';
+require_once __DIR__ . '/../libs/RoborockProtocol.php';
 
 class RoborockVacuum extends IPSModuleStrict
 {
@@ -89,7 +90,7 @@ class RoborockVacuum extends IPSModuleStrict
             return;
         }
         $this->SetTimerInterval('Update', max(10, $this->ReadPropertyInteger('UpdateInterval')) * 1000);
-        $this->SetStatus(102);
+        $this->SetStatus($this->IsHostValid() ? 102 : 202);
 
         if (IPS_GetKernelRunlevel() === KR_READY && $this->HasActiveParent()) {
             $this->SetBuffer('DetailsTime', '0');
@@ -295,6 +296,10 @@ class RoborockVacuum extends IPSModuleStrict
         if ($this->ReadPropertyString('DUID') === '' || !$this->HasActiveParent()) {
             return false;
         }
+        if (!$this->IsHostValid()) {
+            $this->SetStatus(202);
+            return false;
+        }
         try {
             $status = json_decode($this->SendCommand('get_status', '[]'), true);
             if (is_array($status) && isset($status[0])) {
@@ -401,7 +406,9 @@ class RoborockVacuum extends IPSModuleStrict
         if (!is_array($response) || isset($response['error'])) {
             throw new Exception((string) ($response['error']['message'] ?? 'The map could not be loaded'));
         }
-        $raw = gzdecode(base64_decode((string) ($response['map'] ?? '')));
+        $compressed = base64_decode((string) ($response['map'] ?? ''), true);
+        // Maps are about 10-100 kB, the limit protects against oversized data
+        $raw = ($compressed === false) ? false : @gzdecode($compressed, 8 * 1024 * 1024);
         if ($raw === false) {
             throw new Exception('The map could not be decompressed');
         }
@@ -542,13 +549,16 @@ class RoborockVacuum extends IPSModuleStrict
         if ($params === null && trim($Params) !== 'null') {
             throw new Exception('Params must be valid JSON');
         }
+        if (!$this->IsHostValid()) {
+            throw new Exception($this->Translate('The IP address must be an address of the local network'));
+        }
         $response = json_decode($this->SendToCloud([
             'Command' => 'RPC',
             'DUID'    => $this->ReadPropertyString('DUID'),
             'Method'  => $Method,
             'Params'  => $params,
             'Mode'    => ['auto', 'cloud', 'local'][$this->ReadPropertyInteger('Connection')] ?? 'auto',
-            'Host'    => $this->ReadPropertyString('Host')
+            'Host'    => trim($this->ReadPropertyString('Host'))
         ]), true);
         if (!is_array($response)) {
             throw new Exception('No response from the cloud instance');
@@ -795,6 +805,15 @@ class RoborockVacuum extends IPSModuleStrict
         $this->UpdateRooms();
     }
 
+    /**
+     * The fixed IP address of the robot is optional and must be a private address.
+     */
+    private function IsHostValid(): bool
+    {
+        $host = trim($this->ReadPropertyString('Host'));
+        return $host === '' || RoborockProtocol::IsPrivateIP($host);
+    }
+
     private function UpdateConnection(array $Response): void
     {
         if (isset($Response['cloud'])) {
@@ -818,7 +837,7 @@ class RoborockVacuum extends IPSModuleStrict
     private function SendCommandChecked(string $Method, array $Params): void
     {
         $result = json_decode($this->SendCommand($Method, json_encode($Params)), true);
-        $this->SendDebug($Method, json_encode($result), 0);
+        $this->SendDebug($Method, RoborockProtocol::MaskNetworkInfo((string) json_encode($result)), 0);
         // Read the new status shortly after the command
         $this->RegisterOnceTimer('CommandUpdate', 'IPS_Sleep(2000); IPS_RequestAction($_IPS[\'TARGET\'], \'Update\', 0);');
     }

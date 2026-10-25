@@ -40,8 +40,8 @@ werden nur angelegt, wenn der Roboter sie meldet.
 | Eigenschaft | Beschreibung |
 |---|---|
 | Geräte-ID (DUID) | ID des Geräts im Roborock-Konto (wird vom Konfigurator gesetzt) |
-| Verbindung | *Lokales Netzwerk, Cloud als Ersatz* (Standard), *Nur Cloud* oder *Nur lokales Netzwerk* |
-| IP-Adresse | Feste IP-Adresse des Roboters. Leer = automatisch über die Cloud ermitteln |
+| Verbindung | *Lokales Netzwerk, Cloud als Ersatz* (Standard), *Nur Cloud* oder *Nur lokales Netzwerk*. Auch bei *Nur lokales Netzwerk* bleibt die MQTT-Verbindung der [Roborock Cloud](../RoborockCloud/README.md#8-hinweise) bestehen (Statusmeldungen, Karte) |
+| IP-Adresse | Feste IP-Adresse des Roboters. Leer = automatisch über die Cloud ermitteln. Nur private Adressen des lokalen Netzwerks (z. B. 192.168.x.x), sonst Status 202 |
 | Aktualisierungsintervall | Abfrage des Status in Sekunden (Standard 30). Verschleißteile und Statistik alle 10 Minuten, Räume und Routinen stündlich |
 | Karte anzeigen | Speichert die Karte als Bild (Medienobjekt *Karte*). Während der Reinigung bei jeder Aktualisierung, danach noch einmal, sonst stündlich. Benötigt die Cloud-Verbindung |
 | Reinigungsprogramme | siehe unten |

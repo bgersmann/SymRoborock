@@ -15,6 +15,7 @@
             "Error": "Fehler",
             "Please enter the device ID or create the instance via the configurator": "Bitte die Geräte-ID eintragen oder die Instanz über den Konfigurator anlegen",
             "The vacuum is not reachable": "Der Saugroboter ist nicht erreichbar",
+            "The IP address must be an address of the local network": "Die IP-Adresse muss eine Adresse des lokalen Netzwerks sein",
             "The vacuum is not reachable: %s": "Der Saugroboter ist nicht erreichbar: %s",
             "The device was not found in the Roborock account.": "Das Gerät wurde im Roborock-Konto nicht gefunden.",
             "Model: %s, firmware: %s, protocol: %s": "Modell: %s, Firmware: %s, Protokoll: %s",
