@@ -64,12 +64,17 @@ class RoborockVacuum extends IPSModuleStrict
         $this->RegisterAttributeBoolean('WaterSlider', false);
 
         $this->RegisterTimer('Update', 0, 'IPS_RequestAction($_IPS[\'TARGET\'], \'Update\', 0);');
+
+        $this->SetVisualizationType(1);
     }
 
     public function ApplyChanges(): void
     {
         //Never delete this line!
         parent::ApplyChanges();
+
+        // Tile with status, controls and map (HTML-SDK)
+        $this->SetVisualizationType(1);
 
         $this->RegisterMessage(0, IPS_KERNELSTARTED);
 
@@ -112,6 +117,7 @@ class RoborockVacuum extends IPSModuleStrict
         if (str_starts_with($Ident, 'RoomSelect')) {
             // Only a selection for "Clean selected rooms"
             $this->SetValue($Ident, (bool) $Value);
+            $this->PushTile();
             return;
         }
         switch ($Ident) {
@@ -163,6 +169,125 @@ class RoborockVacuum extends IPSModuleStrict
                 throw new Exception('Invalid ident');
         }
         $this->SetValue($Ident, $Value);
+        $this->PushTile();
+    }
+
+    // -------------------------------------------------------------------------
+    // Tile (HTML-SDK)
+    // -------------------------------------------------------------------------
+
+    public function GetVisualizationTile(): string
+    {
+        $state = $this->BuildTileState();
+        $map = json_decode($this->GetBuffer('TileMap'), true);
+        $state['mapImg'] = is_array($map) ? $map : null;
+        $json = json_encode($state, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE);
+        return str_replace('/*INITIAL_STATE*/null', (string) $json, (string) file_get_contents(__DIR__ . '/tile.html'));
+    }
+
+    /**
+     * Sends the state to open visualizations. The map is only sent when it changed.
+     */
+    private function PushTile(?array $MapImage = null): void
+    {
+        $state = $this->BuildTileState();
+        if ($MapImage !== null) {
+            $state['mapImg'] = $MapImage;
+        }
+        $this->UpdateVisualizationValue((string) json_encode($state, JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE));
+    }
+
+    /**
+     * State of the tile. It is sent to the browser: only values that are shown, never keys or network details.
+     */
+    private function BuildTileState(): array
+    {
+        $status = $this->GetStatus();
+        $value = function (string $Ident, mixed $Default = null): mixed {
+            $id = @$this->GetIDForIdent($Ident);
+            return ($id === false) ? $Default : GetValue($id);
+        };
+        $state = [
+            'inactive'     => in_array($status, [104, 202], true),
+            'inactiveText' => [104 => $this->Translate('Please enter the device ID or create the instance via the configurator'), 202 => $this->Translate('The IP address must be an address of the local network')][$status] ?? '',
+            'name'         => IPS_GetName($this->InstanceID),
+            'model'        => $this->GetBuffer('TileModel')
+        ];
+        if ($state['inactive']) {
+            return $state;
+        }
+
+        $code = (int) $value('State', 0);
+        $error = (int) $value('Error', 0);
+        $active = in_array($code, self::ACTIVE_STATES, true) || $code > 6300;
+        $docked = in_array($code, [8, 14, 22, 23, 25, 100], true);
+        if ($status === 201) {
+            $tileStatus = 'err';
+        } elseif ($error !== 0 || in_array($code, [9, 12, 101], true)) {
+            $tileStatus = 'err';
+        } elseif ($code === 10 || $code === 2) {
+            $tileStatus = 'warn';
+        } elseif ($active) {
+            $tileStatus = 'active';
+        } else {
+            $tileStatus = 'ok';
+        }
+        $dockError = (int) $value('DockError', 0);
+
+        $rooms = [];
+        foreach (json_decode($this->ReadAttributeString('Rooms'), true) ?: [] as $segment => $name) {
+            $rooms[] = [
+                'seg'   => (int) $segment,
+                'name'  => $name,
+                'sel'   => (bool) $value('RoomSelect' . $segment, false),
+                'color' => RoborockMap::RoomColor((int) $segment)
+            ];
+        }
+        // Filter and sensors first: small tiles only show the first bars
+        $consumables = [];
+        foreach (['Filter' => 'Filter', 'Sensors' => 'Sensors', 'MainBrush' => 'Main brush', 'SideBrush' => 'Side brush'] as $ident => $caption) {
+            $consumables[] = ['name' => $this->Translate($caption), 'pct' => (int) $value($ident, 0)];
+        }
+        $modes = [];
+        if (@$this->GetIDForIdent('CleanMode') !== false) {
+            foreach ($this->GetCleanModes() as $mode => [$caption]) {
+                $modes[] = ['v' => $mode, 't' => $caption];
+            }
+        }
+        $maps = [];
+        foreach (json_decode($this->ReadAttributeString('Maps'), true) ?: [] as $flag => $map) {
+            $maps[] = ['v' => (int) $flag, 't' => $map['name']];
+        }
+        $programs = [];
+        foreach ($this->GetPrograms() as $index => $program) {
+            $programs[] = ['v' => $index + 1, 't' => trim($program['Name'])];
+        }
+
+        return $state + [
+            'state'         => $code,
+            'stateText'     => ($status === 201) ? $this->Translate('The vacuum is not reachable') : $this->Translate(RoborockCodes::STATES[$code] ?? 'Unknown'),
+            'status'        => $tileStatus,
+            'active'        => $active,
+            'paused'        => $code === 10,
+            'docked'        => $docked,
+            'charging'      => $code === 8,
+            'battery'       => (int) $value('Battery', 0),
+            'errorText'     => $error !== 0 ? $this->Translate(RoborockCodes::ERRORS[$error] ?? 'Error') . ' (' . $error . ')' : '',
+            'dockErrorText' => $dockError !== 0 ? $this->Translate(RoborockCodes::DOCK_ERRORS[$dockError] ?? 'Dock error') : '',
+            'room'          => (string) $value('CurrentRoom', ''),
+            'cleanTime'     => (int) $value('CleanTime', 0),
+            'cleanArea'     => (float) $value('CleanArea', 0.0),
+            'cloud'         => (int) $value('CloudConnection', 0),
+            'local'         => (int) $this->ReadPropertyInteger('Connection') === 1 ? null : (bool) $value('LocalConnection', false),
+            'dock'          => $this->ReadAttributeInteger('DockType') > 0,
+            'consumables'   => $consumables,
+            'rooms'         => $rooms,
+            'modes'         => $modes,
+            'mode'          => (int) $value('CleanMode', 0),
+            'maps'          => $maps,
+            'map'           => $this->ReadAttributeInteger('CurrentMap'),
+            'programs'      => $programs
+        ];
     }
 
     public function GetConfigurationForm(): string
@@ -326,6 +451,11 @@ class RoborockVacuum extends IPSModuleStrict
                 $this->UpdateFeatures();
                 $this->SetBuffer('RoomsTime', (string) time());
             });
+            if ($this->GetBuffer('TileModel') === '') {
+                $info = $this->GetDeviceInfo();
+                $this->SetBuffer('TileModel', (string) (($info['productName'] ?? '') !== '' ? $info['productName'] : ($info['model'] ?? '')));
+            }
+            $this->PushTile();
         }
         if (time() - (int) $this->GetBuffer('DetailsTime') >= self::DETAILS_INTERVAL) {
             $this->SetBuffer('DetailsTime', (string) time());
@@ -394,6 +524,7 @@ class RoborockVacuum extends IPSModuleStrict
         }
         $this->WriteAttributeString('Rooms', json_encode($rooms));
         $this->RegisterMapVariables();
+        $this->PushTile();
         return sprintf($this->Translate('%d rooms found'), count($rooms));
     }
 
@@ -418,6 +549,12 @@ class RoborockVacuum extends IPSModuleStrict
         $result = RoborockMap::Render($map, $rooms);
         $this->SetMapImage($result['png']);
         $this->SetValue('CurrentRoom', $rooms[(string) $result['robotRoom']] ?? '-');
+
+        // The tile shows the rooms as buttons, so its map has no labels
+        $tile = RoborockMap::Render($map, $rooms, 600, false);
+        $tileMap = ['png' => base64_encode($tile['png']), 'w' => $tile['width'], 'h' => $tile['height'], 'rooms' => (object) $tile['rooms']];
+        $this->SetBuffer('TileMap', (string) json_encode($tileMap));
+        $this->PushTile($tileMap);
         return true;
     }
 
@@ -945,6 +1082,7 @@ class RoborockVacuum extends IPSModuleStrict
                 }
             }
         });
+        $this->PushTile();
     }
 
     private function ApplyStatus(array $Status): void
@@ -1030,6 +1168,7 @@ class RoborockVacuum extends IPSModuleStrict
                 $this->SetValue($ident, max(0, (int) round(100 - $Status[$field] / $lifetime * 100)));
             }
         }
+        $this->PushTile();
     }
 
     private function CleanModeFromValues(): int

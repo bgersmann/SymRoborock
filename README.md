@@ -26,6 +26,7 @@ Modul-URL: `https://github.com/bgersmann/SymRoborock`
 - Reinigungsprogramme: feste Abläufe aus Karte, Räumen und Einstellungen als Startknopf
 - Routinen aus der Roborock-App starten
 - Karte als Bild mit Räumen, Reinigungsweg, Sperrzonen, Station und Roboter
+- Eigene Kachel für die Kachel-Visualisierung: klein mit Status und Bedienung, groß mit Karte und Raumauswahl direkt in der Karte
 - Status, Akku, Fehler, Stationsfehler, aktueller Raum, Reinigungsdauer/-fläche, Verschleißteile, Statistik, Verbindungsstatus
 - Kommunikation lokal im Netzwerk (TCP 58867), Cloud (MQTT) als Ersatz und für Statusmeldungen
 

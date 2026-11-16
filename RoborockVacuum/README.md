@@ -63,6 +63,19 @@ In der Liste *Reinigungsprogramme* lassen sich feste Abläufe anlegen. Hinzufüg
 Unter der Liste stehen die Räume jeder Karte. Unbekannte Raumnamen werden dort angezeigt.
 Mit *Ein Programmstart während einer Reinigung schickt den Roboter zur Station* wird jeder Programm-Knopf zum Start/Stopp-Knopf.
 
+### Kachel
+
+Die Instanz bringt eine eigene Kachel für die Kachel-Visualisierung mit. Der Inhalt passt sich der Kachelgröße an:
+
+| Größe | Inhalt |
+|---|---|
+| Klein (z. B. 2×2) | Status und aktueller Raum, Akku, Fläche, Knöpfe Start/Pause, Station, Stopp; wenn Platz ist Filter und Sensoren in % |
+| Mittel (z. B. 3×3) | zusätzlich Dauer, Finden, Staubbehälter leeren und Mopp waschen (an der Station), Programme, alle Verschleißteile, Cloud- und lokale Verbindung |
+| Groß (ab ca. 4×4) | zusätzlich die Karte. Jeder Raum hat dort einen Knopf zum Aus- und Abwählen, darunter *n Räume reinigen*. Dazu Reinigungsmodus und Kartenwechsel |
+
+Fehler des Roboters oder der Station werden rot angezeigt. Die Karte der Kachel erscheint nur, wenn *Karte anzeigen* aktiv ist
+und die Cloud-Verbindung besteht. Die Raumauswahl der Kachel ist dieselbe wie die der Variablen *… auswählen*.
+
 ### 6. Statusvariablen
 
 | Ident | Typ | Beschreibung |

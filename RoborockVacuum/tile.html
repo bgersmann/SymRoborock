@@ -1,0 +1,377 @@
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="/icons.js"></script>
+<style>
+    :root {
+        /* --accent-color, --content-color and --card-color are provided by the HTML-SDK. */
+        --on-accent: #101114;
+        --ok: #19d400;
+        --warn: #f5b800;
+        --err: #f55143;
+        --muted: rgba(128, 128, 128, .95);
+        --muted: color-mix(in srgb, var(--content-color) 62%, transparent);
+        --track: rgba(128, 128, 128, .22);
+        --track: color-mix(in srgb, var(--content-color) 14%, transparent);
+        --line: rgba(128, 128, 128, .18);
+        --line: color-mix(in srgb, var(--content-color) 10%, transparent);
+        --chipbg: rgba(255, 255, 255, .85);
+        --chipbg: color-mix(in srgb, var(--card-color) 82%, transparent);
+        --warn-text: var(--warn);
+        --warn-text: color-mix(in srgb, var(--warn) 72%, var(--content-color));
+        --err-text: var(--err);
+        --err-text: color-mix(in srgb, var(--err) 85%, var(--content-color));
+        --ok-text: var(--ok);
+        --ok-text: color-mix(in srgb, var(--ok) 78%, var(--content-color));
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; overflow: hidden; }
+    body { margin: 0 !important; }
+    #t { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+    .hid { display: none !important; }
+    .narrow .wide-only { display: none !important; }
+
+    .panel { display: flex; flex-direction: column; gap: .6em; min-width: 0; min-height: 0; overflow: hidden; flex: 1 1 auto; }
+    .split { display: flex; flex-direction: column; gap: .8em; height: 100%; min-height: 0; }
+    .split.wide { flex-direction: row; }
+    .split .mapbox { flex: 1 1 auto; min-height: 0; min-width: 0; display: flex; align-items: center; justify-content: center; }
+    .split.wide .panel { flex: 0 0 min(42%, 300px); }
+    .split:not(.wide) .panel { flex: 0 1 auto; }
+
+    .head { display: flex; align-items: center; gap: .7em; min-width: 0; padding-right: 1.6em; flex: none; }
+    .ic { position: relative; font-size: 1.3em; width: 1.3em; text-align: center; flex: none; line-height: 1; }
+    .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+    .ic .dot { position: absolute; right: -4px; bottom: -3px; box-shadow: 0 0 0 2px var(--card-color); }
+    .ok { background: var(--ok); }
+    .warn { background: var(--warn); }
+    .err { background: var(--err); }
+    .active { background: var(--accent-color); }
+    .unknown { background: var(--muted); }
+    .ht { min-width: 0; line-height: 1.25; }
+    .ht div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sub { font-size: .78em; color: var(--muted); }
+    .head .inline-dot { display: none; }
+    .titled .head { gap: .45em; }
+    .titled .head .ic, .titled .head .name { display: none; }
+    .titled .head .inline-dot { display: inline-block; }
+
+    .alert { display: flex; gap: .5em; align-items: center; font-size: .82em; color: var(--err-text); line-height: 1.3; flex: none; }
+    .alert span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .kpis { display: flex; gap: .55em; flex: none; }
+    .kpi { flex: 1 1 0; min-width: 0; line-height: 1.15; }
+    .kpi .v { font-size: 1.45em; white-space: nowrap; }
+    .kpi .v small { font-size: .55em; color: var(--muted); }
+    .kpi .v i { font-size: .6em; color: var(--accent-color); margin-left: .2em; }
+    .kpi .l { font-size: .74em; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .txtwarn { color: var(--warn-text); }
+    .txterr { color: var(--err-text); }
+    .txtok { color: var(--ok-text); }
+
+    .btnrow { display: flex; gap: 6px; flex: none; min-width: 0; flex-wrap: wrap; }
+    .btn { border: 0; border-radius: 8px; padding: .5em .75em; font: inherit; font-size: .85em; background: var(--track); color: var(--content-color); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: .45em; min-width: 0; }
+    .btn i { color: var(--accent-color); }
+    .btn.primary { background: var(--accent-color); color: var(--on-accent); }
+    .btn.primary i { color: var(--on-accent); }
+    .btn.grow { flex: 1 1 auto; }
+    .btn.busy { opacity: .6; }
+    .btn[disabled] { opacity: .45; cursor: default; }
+    .btn span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .narrow .btn .lbl { display: none; }
+
+    .sect { display: flex; flex-direction: column; gap: .35em; flex: none; min-width: 0; }
+    .sect .cap { font-size: .74em; color: var(--muted); }
+    .chips { display: flex; gap: 5px; flex-wrap: wrap; }
+    .chip { font-size: .78em; padding: 3px 9px; border-radius: 11px; background: var(--track); white-space: nowrap; border: 0; color: var(--content-color); font-family: inherit; cursor: pointer; display: inline-flex; align-items: center; gap: .4em; }
+    .chip.on { background: var(--accent-color); color: var(--on-accent); }
+    .chip .sw { width: 8px; height: 8px; border-radius: 50%; background: var(--rc, var(--muted)); flex: none; }
+
+    .bars { display: grid; grid-template-columns: 1fr 1fr; gap: .45em 1em; flex: none; }
+    .narrow .bars { grid-template-columns: 1fr; }
+    .barx { min-width: 0; }
+    .barx .r { display: flex; justify-content: space-between; gap: .5em; font-size: .76em; line-height: 1.35; color: var(--muted); }
+    .barx .r span { white-space: nowrap; }
+    .barx .r span:last-child { color: var(--content-color); }
+    .track { height: 5px; border-radius: 3px; background: var(--track); overflow: hidden; margin-top: 2px; }
+    .track i { display: block; height: 100%; background: var(--accent-color); border-radius: 3px; }
+    .track i.warn { background: var(--warn); }
+    .track i.err { background: var(--err); }
+
+    /* Map with one button per room in the center of the room */
+    .mapin { position: relative; }
+    .mapin img { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
+    .room { position: absolute; transform: translate(-50%, -50%); border: 0; border-radius: 11px; padding: 3px 8px 3px 6px; font: inherit; font-size: .72em; line-height: 1.2; background: var(--chipbg); color: var(--content-color); cursor: pointer; display: inline-flex; align-items: center; gap: .35em; white-space: nowrap; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); max-width: 40%; }
+    .room span { overflow: hidden; text-overflow: ellipsis; }
+    .room i { font-size: .95em; color: var(--rc, var(--muted)); }
+    .room.on { background: var(--accent-color); color: var(--on-accent); }
+    .room.on i { color: var(--on-accent); }
+
+    .foot { margin-top: auto; display: flex; gap: .85em; align-items: center; font-size: .76em; color: var(--muted); white-space: nowrap; overflow: hidden; flex: none; }
+    .foot span { display: inline-flex; align-items: center; gap: 4px; }
+    .empty { margin: auto; text-align: center; color: var(--muted); font-size: .9em; padding: 0 1em; }
+</style>
+
+<div id="t"></div>
+
+<script>
+    // Initial state of the instance. Afterwards the module pushes changes, which are merged into it.
+    let state = /*INITIAL_STATE*/null;
+
+    const params = new URLSearchParams(window.location.search);
+    const px = (name, fallback) => {
+        const value = parseFloat(params.get(name));
+        return isNaN(value) ? fallback : value;
+    };
+    const padTop = px('margintop', 15), padSide = px('marginside', 15), padBottom = px('marginbottom', 15);
+    const box = document.getElementById('t');
+    box.style.padding = `${padTop}px ${padSide}px ${padBottom}px`;
+    // The visualization reserves a larger top margin if it draws a title bar itself.
+    if (padTop >= 40) {
+        document.body.classList.add('titled');
+    }
+    const accent = (params.get('accentcolor') || '00cdab').padStart(6, '0');
+    const accentValue = parseInt(accent, 16);
+    const luminance = (.299 * (accentValue >> 16) + .587 * (accentValue >> 8 & 255) + .114 * (accentValue & 255)) / 255;
+    document.documentElement.style.setProperty('--on-accent', luminance > .5 ? '#101114' : '#ffffff');
+
+    const T = (text) => (typeof translate === 'function' ? translate(text) : text);
+    // Names come from the Roborock app and must never be interpreted as markup.
+    const E = (text) => String(text ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const num = (value, digits = 0) => Number(value).toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+    const icon = (name) => `<i class="fa-light fa-${name}"></i>`;
+    const has = (value) => value !== undefined && value !== null && value !== '';
+    const clamp = (value) => Math.max(0, Math.min(100, Number(value) || 0));
+    const duration = (seconds) => {
+        const s = Math.max(0, Math.floor(Number(seconds) || 0)), h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+        return h > 0 ? `${h}:${String(m).padStart(2, '0')}` : `${m}`;
+    };
+
+    // Values of the variable "Control"
+    const C = { start: 1, pause: 2, stop: 3, home: 4, locate: 6, emptyBin: 7, washMop: 8, cleanRooms: 9 };
+
+    function availableSize() {
+        return [box.clientWidth - padSide * 2, box.clientHeight - padTop - padBottom];
+    }
+
+    function head(s) {
+        const sub = [s.stateText, s.room && s.room !== '-' ? s.room : ''].filter(has).join(' · ');
+        return `<div class="head">
+            <div class="ic">${icon('robot')}<span class="dot ${s.status || 'unknown'}"></span></div>
+            <div class="ht"><div class="name">${E(s.name)}</div><div class="sub"><span class="dot inline-dot ${s.status || 'unknown'}"></span> ${E(sub)}</div></div>
+        </div>`;
+    }
+
+    function alerts(s) {
+        return [s.errorText, s.dockErrorText].filter(has)
+            .map((text) => `<div class="alert">${icon('triangle-exclamation')}<span>${E(text)}</span></div>`).join('');
+    }
+
+    function kpis(s) {
+        const batteryCls = s.battery <= 15 ? 'txterr' : (s.battery <= 30 ? 'txtwarn' : '');
+        const items = [
+            [`<span class="${batteryCls}">${num(s.battery)}</span><small> %</small>${s.charging ? icon('bolt') : ''}`, T('Battery'), ''],
+            [`${num(s.cleanArea, 1)}<small> m²</small>`, T('Area'), ''],
+            [`${duration(s.cleanTime)}<small> ${Number(s.cleanTime) >= 3600 ? 'h' : 'min'}</small>`, T('Duration'), 'wide-only']
+        ];
+        return `<div class="kpis">${items.map(([v, l, cls]) => `<div class="kpi ${cls}"><div class="v">${v}</div><div class="l">${E(l)}</div></div>`).join('')}</div>`;
+    }
+
+    function controls(s) {
+        const button = (value, iconName, label, cls = '', p = '') => `<button class="btn ${cls}" data-ctl="${value}" ${p ? `data-p="${p}"` : ''} title="${E(label)}" aria-label="${E(label)}">${icon(iconName)}<span class="lbl">${E(label)}</span></button>`;
+        let html = s.active
+            ? button(C.pause, 'pause', T('Pause'), 'primary grow')
+            : button(C.start, 'play', T(s.paused ? 'Resume' : 'Start'), 'primary grow');
+        if (!s.docked) {
+            html += button(C.home, 'house', T('Dock'));
+        }
+        if (s.active || s.paused) {
+            html += button(C.stop, 'stop', T('Stop'));
+        }
+        html += button(C.locate, 'location-dot', T('Locate'), '', 6);
+        if (s.dock && s.docked) {
+            html += button(C.emptyBin, 'trash-can', T('Empty bin'), '', 7);
+            html += button(C.washMop, 'droplet', T('Wash mop'), '', 7);
+        }
+        return `<div class="btnrow">${html}</div>`;
+    }
+
+    function rooms(s, onMap) {
+        const list = s.rooms || [];
+        if (!list.length) {
+            return '';
+        }
+        const selected = list.filter((r) => r.sel).length;
+        const label = selected > 0 ? T('Clean %d rooms').replace('%d', selected) : T('Select rooms');
+        let html = '<div class="sect">';
+        if (!onMap) {
+            html += `<div class="chips">${list.map((r) => `<button class="chip ${r.sel ? 'on' : ''}" data-room="${E(r.seg)}"><span class="sw" style="--rc:${E(r.color || '')}"></span>${E(r.name)}</button>`).join('')}</div>`;
+        }
+        html += `<div class="btnrow"><button class="btn grow" data-clean ${selected ? '' : 'disabled'}>${icon('broom')}<span>${E(label)}</span></button>`;
+        if (selected) {
+            html += `<button class="btn" data-clear title="${E(T('Clear selection'))}" aria-label="${E(T('Clear selection'))}">${icon('xmark')}</button>`;
+        }
+        return html + '</div></div>';
+    }
+
+    function chipSection(caption, items, attribute, current, p) {
+        if (!items || !items.length) {
+            return '';
+        }
+        return `<div class="sect" data-p="${p}"><div class="cap">${E(caption)}</div><div class="chips">${items.map((item) => `<button class="chip ${current !== undefined && String(item.v) === String(current) ? 'on' : ''}" ${attribute}="${E(item.v)}">${E(item.t)}</button>`).join('')}</div></div>`;
+    }
+
+    function consumables(s) {
+        const list = s.consumables || [];
+        if (!list.length) {
+            return '';
+        }
+        // Each bar is hidden on its own (the last ones first), so small tiles still show the first ones
+        return `<div class="bars">${list.map((c) => {
+            const cls = c.pct <= 5 ? 'err' : (c.pct <= 15 ? 'warn' : '');
+            return `<div class="barx" data-p="3"><div class="r"><span>${E(c.name)}</span><span>${num(c.pct)} %</span></div><div class="track"><i class="${cls}" style="width:${clamp(c.pct)}%"></i></div></div>`;
+        }).join('')}</div>`;
+    }
+
+    function foot(s) {
+        const cloud = { 0: ['err', 'Disconnected'], 1: ['ok', 'Connected'], 2: ['warn', 'Not responding'] }[s.cloud] || ['unknown', ''];
+        let html = `<span title="${E(T('Cloud connection'))}: ${E(T(cloud[1]))}">${icon('cloud')}<span class="dot ${cloud[0]}"></span></span>`;
+        if (s.local !== null && s.local !== undefined) {
+            html += `<span title="${E(T('Local connection'))}">${icon('network-wired')}<span class="dot ${s.local ? 'ok' : 'err'}"></span></span>`;
+        }
+        if (has(s.model)) {
+            html += `<span class="wide-only">${E(s.model)}</span>`;
+        }
+        return `<div class="foot" data-p="8">${html}</div>`;
+    }
+
+    function panel(s, big) {
+        let html = head(s) + alerts(s) + kpis(s) + controls(s);
+        if (big) {
+            html += rooms(s, true);
+            html += chipSection(T('Cleaning mode'), s.modes, 'data-mode', s.mode, 5);
+            if ((s.maps || []).length > 1) {
+                html += chipSection(T('Map'), s.maps, 'data-map', s.map, 5);
+            }
+        }
+        html += chipSection(T('Programs'), s.programs, 'data-prog', undefined, 4);
+        html += consumables(s);
+        return `<div class="panel">${html}${foot(s)}</div>`;
+    }
+
+    function mapView(s) {
+        const m = s.mapImg;
+        const positions = m.rooms || {};
+        const buttons = (s.rooms || []).filter((r) => positions[r.seg]).map((r) => {
+            const p = positions[r.seg];
+            return `<button class="room ${r.sel ? 'on' : ''}" data-room="${E(r.seg)}" style="left:${Number(p.x)}%;top:${Number(p.y)}%;--rc:${E(p.color)}">${icon(r.sel ? 'circle-check' : 'circle')}<span>${E(r.name)}</span></button>`;
+        }).join('');
+        return `<div class="mapbox"><div class="mapin" data-w="${Number(m.w)}" data-h="${Number(m.h)}"><img alt="" src="data:image/png;base64,${m.png}">${buttons}</div></div>`;
+    }
+
+    function render() {
+        if (!state) {
+            return;
+        }
+        if (state.inactive) {
+            box.innerHTML = `<div class="empty">${E(state.inactiveText || T('Instance inactive'))}</div>`;
+            return;
+        }
+        if (!has(state.stateText)) {
+            box.innerHTML = `<div class="empty">${E(T('No data yet'))}</div>`;
+            return;
+        }
+        const [width, height] = availableSize();
+        // Large tiles show the map; with the map the rooms are selected directly in it
+        const big = !!(state.mapImg && state.mapImg.png) && width >= 360 && height >= 340;
+        if (big) {
+            const wide = width > height * 1.25;
+            box.innerHTML = `<div class="split ${wide ? 'wide' : ''}">${mapView(state)}${panel(state, true)}</div>`;
+        } else {
+            box.innerHTML = panel(state, false);
+        }
+        fit();
+    }
+
+    // Size classes, then everything marked with data-p is hidden (highest number first) until nothing overflows.
+    function fit() {
+        const [width, height] = availableSize();
+        document.body.classList.toggle('narrow', width < 230);
+        const scope = box.querySelector('.panel') || box;
+        scope.querySelectorAll('.hid').forEach((e) => e.classList.remove('hid'));
+        const overflow = () => scope.scrollHeight > scope.clientHeight + 1 || box.scrollHeight > box.clientHeight + 1;
+        const steps = [...new Set([...scope.querySelectorAll('[data-p]')].map((e) => Number(e.dataset.p)))].sort((a, b) => b - a);
+        for (const step of steps) {
+            if (!overflow()) {
+                break;
+            }
+            for (const item of [...scope.querySelectorAll(`[data-p="${step}"]`)].reverse()) {
+                if (!overflow()) {
+                    break;
+                }
+                item.classList.add('hid');
+            }
+        }
+        // The map keeps its aspect ratio within the remaining space
+        const mapBox = box.querySelector('.mapbox'), mapIn = box.querySelector('.mapin');
+        if (mapBox && mapIn) {
+            const w = Number(mapIn.dataset.w) || 1, h = Number(mapIn.dataset.h) || 1;
+            const scale = Math.min(mapBox.clientWidth / w, mapBox.clientHeight / h);
+            mapIn.style.width = `${Math.floor(w * scale)}px`;
+            mapIn.style.height = `${Math.floor(h * scale)}px`;
+        }
+    }
+
+    window.handleMessage = (data) => {
+        const update = typeof data === 'string' ? JSON.parse(data) : data;
+        state = Object.assign(state || {}, update);
+        render();
+    };
+
+    function setRoom(seg, selected) {
+        const room = (state.rooms || []).find((r) => String(r.seg) === String(seg));
+        if (room) {
+            room.sel = selected;
+        }
+        requestAction(`RoomSelect${seg}`, selected);
+    }
+
+    box.addEventListener('click', (event) => {
+        const target = event.target.closest('button');
+        if (!target || target.disabled) {
+            return;
+        }
+        if (target.dataset.ctl) {
+            if (!target.classList.contains('busy')) {
+                target.classList.add('busy');
+                requestAction('Control', Number(target.dataset.ctl));
+                setTimeout(() => target.classList.remove('busy'), 4000);
+            }
+        } else if (target.dataset.room !== undefined) {
+            const room = (state.rooms || []).find((r) => String(r.seg) === target.dataset.room);
+            setRoom(target.dataset.room, !(room && room.sel));
+            render();
+        } else if (target.hasAttribute('data-clear')) {
+            (state.rooms || []).filter((r) => r.sel).forEach((r) => setRoom(r.seg, false));
+            render();
+        } else if (target.hasAttribute('data-clean')) {
+            target.classList.add('busy');
+            requestAction('Control', C.cleanRooms);
+        } else if (target.dataset.prog) {
+            target.classList.add('busy');
+            requestAction('Program', Number(target.dataset.prog));
+            setTimeout(() => target.classList.remove('busy'), 4000);
+        } else if (target.dataset.mode) {
+            state.mode = Number(target.dataset.mode);
+            requestAction('CleanMode', state.mode);
+            render();
+        } else if (target.dataset.map) {
+            state.map = Number(target.dataset.map);
+            requestAction('Map', state.map);
+            render();
+        }
+    });
+
+    window.addEventListener('resize', render);
+    if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(fit);
+    }
+    render();
+</script>

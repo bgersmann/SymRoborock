@@ -125,10 +125,11 @@ class RoborockMap
     }
 
     /**
-     * Renders the map as PNG. $RoomNames maps segment IDs to names.
-     * Returns ['png' => binary, 'robotRoom' => segment ID or 0].
+     * Renders the map as PNG. $RoomNames maps segment IDs to names, $Labels draws them into the image.
+     * Returns ['png' => binary, 'robotRoom' => segment ID or 0, 'width', 'height',
+     * 'rooms' => [segment => ['x' => %, 'y' => %, 'color' => '#rrggbb']]] (center of each room in the image).
      */
-    public static function Render(array $Map, array $RoomNames, int $MaxSize = 800): array
+    public static function Render(array $Map, array $RoomNames, int $MaxSize = 800, bool $Labels = true): array
     {
         $image = $Map['image'];
         if ($image === null || $image['width'] === 0 || $image['height'] === 0) {
@@ -296,14 +297,26 @@ class RoborockMap
         $textColor = imagecolorallocate($canvas, 30, 35, 45);
         $haloColor = imagecolorallocatealpha($canvas, 255, 255, 255, 40);
         $font = $scale >= 3 ? 5 : 3;
+        $canvasWidth = $cropWidth * $scale;
+        $canvasHeight = $cropHeight * $scale;
+        $roomPositions = [];
         foreach ($rooms as $segment => $room) {
+            if ($room[6] === 0) {
+                continue;
+            }
+            $centerX = (int) round(($room[4] / $room[6] - $minX + 0.5) * $scale);
+            $centerY = (int) round(($room[5] / $room[6] - $minY + 0.5) * $scale);
+            [$r, $g, $b] = self::ROOM_COLORS[$segment % count(self::ROOM_COLORS)];
+            $roomPositions[$segment] = [
+                'x'     => round($centerX / $canvasWidth * 100, 2),
+                'y'     => round($centerY / $canvasHeight * 100, 2),
+                'color' => sprintf('#%02x%02x%02x', $r, $g, $b)
+            ];
             $name = $RoomNames[(string) $segment] ?? $RoomNames[$segment] ?? '';
-            if ($name === '' || $room[6] === 0) {
+            if (!$Labels || $name === '') {
                 continue;
             }
             $text = mb_convert_encoding($name, 'ISO-8859-1', 'UTF-8');
-            $centerX = (int) round(($room[4] / $room[6] - $minX + 0.5) * $scale);
-            $centerY = (int) round(($room[5] / $room[6] - $minY + 0.5) * $scale);
             $textWidth = imagefontwidth($font) * strlen($text);
             $textHeight = imagefontheight($font);
             $left = (int) ($centerX - $textWidth / 2);
@@ -335,7 +348,22 @@ class RoborockMap
         imagepng($canvas, null, 6);
         $png = ob_get_clean();
         imagedestroy($canvas);
-        return ['png' => $png, 'robotRoom' => $robotRoom];
+        return [
+            'png'       => $png,
+            'robotRoom' => $robotRoom,
+            'width'     => $canvasWidth,
+            'height'    => $canvasHeight,
+            'rooms'     => $roomPositions
+        ];
+    }
+
+    /**
+     * Color of a room in the map as #rrggbb.
+     */
+    public static function RoomColor(int $Segment): string
+    {
+        [$r, $g, $b] = self::ROOM_COLORS[$Segment % count(self::ROOM_COLORS)];
+        return sprintf('#%02x%02x%02x', $r, $g, $b);
     }
 
     /**
