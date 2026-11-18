@@ -1,4 +1,4 @@
-# SymRoborock
+# Roborock
 
 Symcon-Bibliothek für Roborock-Saugroboter. Protokoll und Abläufe orientieren sich an der Home-Assistant-Integration
 [roborock](https://github.com/home-assistant/core/tree/dev/homeassistant/components/roborock) bzw. der zugrunde liegenden
